@@ -1,0 +1,41 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# JavaScript and Expo
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+*.tsbuildinfo
+
+# Native build output and signing material
+android/
+ios/
+.gradle/
+.kotlin/
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+
+# .NET
+bin/
+obj/
+TestResults/
+*.user
+
+# Logs and operating-system files
+*.log
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
