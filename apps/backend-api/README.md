@@ -55,6 +55,14 @@ Production environments must supply the database connection securely through
 - `POST /api/v1/drivers/me/documents` — register metadata for a protected Driver document.
 - `GET /api/v1/drivers/me/vehicle` — return the signed-in Driver's current vehicle.
 - `PUT /api/v1/drivers/me/vehicle` — create or update editable vehicle information.
+- `POST /api/v1/trips` — request a trip as the signed-in Passenger.
+- `GET /api/v1/trips/me` — list trips belonging to the signed-in Passenger or Driver.
+- `GET /api/v1/trips/{tripId}` — return a trip visible to the signed-in participant.
+- `POST /api/v1/trips/{tripId}/accept` — assign the signed-in Driver to a requested trip.
+- `POST /api/v1/trips/{tripId}/arrive` — mark the assigned Driver as arrived.
+- `POST /api/v1/trips/{tripId}/start` — start an arrived trip.
+- `POST /api/v1/trips/{tripId}/complete` — complete an in-progress trip.
+- `POST /api/v1/trips/{tripId}/cancel` — cancel a trip before it starts.
 - `/hubs/operations` — SignalR transport endpoint reserved for authorized live
   trip and operations events.
 - `/openapi/v1.json` — OpenAPI document in the Development environment only.
@@ -76,7 +84,7 @@ dotnet tool restore
 dotnet tool run dotnet-ef migrations script --idempotent --configuration Release --project src/Rydo.Infrastructure --startup-project src/Rydo.Api
 ```
 
-Trips, matching, payments, ratings, and admin operations remain intentionally
+Matching, payments, ratings, and admin operations remain intentionally
 separated for focused follow-up branches.
 
 ## Phone authentication

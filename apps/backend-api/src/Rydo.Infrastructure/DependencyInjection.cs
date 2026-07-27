@@ -4,10 +4,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Rydo.Application.Authentication;
 using Rydo.Application.Drivers;
 using Rydo.Application.Passengers;
+using Rydo.Application.Trips;
 using Rydo.Infrastructure.Authentication;
 using Rydo.Infrastructure.Drivers;
 using Rydo.Infrastructure.Passengers;
 using Rydo.Infrastructure.Persistence;
+using Rydo.Infrastructure.Trips;
 
 namespace Rydo.Infrastructure;
 
@@ -39,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<IDriverProfileService, DriverProfileService>();
         services.AddScoped<IDriverVehicleService, DriverVehicleService>();
         services.AddScoped<IPassengerProfileService, PassengerProfileService>();
+        services.AddScoped<ITripService, TripService>();
 
         if (isDevelopment)
         {

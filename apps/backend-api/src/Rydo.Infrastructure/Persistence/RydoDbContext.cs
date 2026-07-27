@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Rydo.Domain.Drivers;
 using Rydo.Domain.Identity;
 using Rydo.Domain.Passengers;
+using Rydo.Domain.Trips;
 
 namespace Rydo.Infrastructure.Persistence;
 
@@ -23,6 +24,8 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
     public DbSet<DriverDocument> DriverDocuments => Set<DriverDocument>();
 
     public DbSet<DriverVehicle> DriverVehicles => Set<DriverVehicle>();
+
+    public DbSet<Trip> Trips => Set<Trip>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -158,6 +161,48 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
             entity.HasIndex(vehicle => vehicle.DriverUserId).IsUnique();
             entity.HasIndex(vehicle => vehicle.RegistrationNumber).IsUnique();
             entity.HasIndex(vehicle => vehicle.VehicleIdentificationNumber).IsUnique();
+        });
+
+        modelBuilder.Entity<Trip>(entity =>
+        {
+            entity.ToTable("trips", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_trips_PickupLatitude",
+                    "\"PickupLatitude\" BETWEEN -90 AND 90");
+                table.HasCheckConstraint(
+                    "CK_trips_PickupLongitude",
+                    "\"PickupLongitude\" BETWEEN -180 AND 180");
+                table.HasCheckConstraint(
+                    "CK_trips_DestinationLatitude",
+                    "\"DestinationLatitude\" BETWEEN -90 AND 90");
+                table.HasCheckConstraint(
+                    "CK_trips_DestinationLongitude",
+                    "\"DestinationLongitude\" BETWEEN -180 AND 180");
+            });
+            entity.HasKey(trip => trip.Id);
+            entity.Property(trip => trip.PickupAddress).HasMaxLength(300).IsRequired();
+            entity.Property(trip => trip.DestinationAddress).HasMaxLength(300).IsRequired();
+            entity.Property(trip => trip.Status).HasConversion<string>().HasMaxLength(32);
+            entity.Property(trip => trip.CancellationReason).HasMaxLength(250);
+            entity.Property(trip => trip.Version).IsConcurrencyToken();
+            entity.HasOne<UserAccount>()
+                .WithMany()
+                .HasForeignKey(trip => trip.PassengerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<UserAccount>()
+                .WithMany()
+                .HasForeignKey(trip => trip.DriverUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(trip => trip.PassengerUserId)
+                .IsUnique()
+                .HasFilter(
+                    "\"Status\" IN ('Requested', 'Accepted', 'DriverArrived', 'InProgress')");
+            entity.HasIndex(trip => trip.DriverUserId)
+                .IsUnique()
+                .HasFilter(
+                    "\"DriverUserId\" IS NOT NULL AND \"Status\" IN ('Accepted', 'DriverArrived', 'InProgress')");
+            entity.HasIndex(trip => new { trip.Status, trip.RequestedAt });
         });
 
         base.OnModelCreating(modelBuilder);
