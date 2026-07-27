@@ -78,6 +78,10 @@ Production environments must supply the database connection securely through
 - `GET /api/v1/trips/{tripId}/ratings/me` — return the signed-in participant's own rating.
 - `GET /api/v1/ratings/me/summary` — return aggregate ratings received by the signed-in user.
 - `GET /api/v1/drivers/{driverUserId}/ratings/summary` — return a Driver's aggregate rating summary.
+- `POST /api/v1/trips/{tripId}/disputes` — open a dispute for a completed or cancelled trip.
+- `GET /api/v1/disputes/me` — list disputes involving the signed-in participant.
+- `GET /api/v1/disputes/{disputeId}` — return an involved participant's dispute and messages.
+- `POST /api/v1/disputes/{disputeId}/messages` — add a message to an open participant dispute.
 - `/hubs/operations` — SignalR transport endpoint reserved for authorized live
   trip and operations events.
 - `/openapi/v1.json` — OpenAPI document in the Development environment only.
@@ -101,6 +105,15 @@ dotnet tool run dotnet-ef migrations script --idempotent --configuration Release
 
 Admin operations remain intentionally
 separated for focused follow-up branches.
+
+## Disputes
+
+A Passenger or assigned Driver can open one dispute for a completed or
+cancelled trip. Opening details are immutable, identical retries are
+idempotent, and both trip participants can view the case and add messages while
+it remains open or under review. Status and resolution fields are persisted for
+the future Admin operations layer; participant endpoints cannot resolve or
+reject their own disputes.
 
 ## Ratings
 

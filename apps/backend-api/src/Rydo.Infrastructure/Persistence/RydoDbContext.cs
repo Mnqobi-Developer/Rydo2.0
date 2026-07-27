@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Rydo.Domain.Drivers;
+using Rydo.Domain.Disputes;
 using Rydo.Domain.Identity;
 using Rydo.Domain.Matching;
 using Rydo.Domain.Passengers;
@@ -39,6 +40,10 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
     public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
 
     public DbSet<Rating> Ratings => Set<Rating>();
+
+    public DbSet<Dispute> Disputes => Set<Dispute>();
+
+    public DbSet<DisputeMessage> DisputeMessages => Set<DisputeMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -345,6 +350,55 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
             entity.HasOne<UserAccount>().WithMany().HasForeignKey(rating => rating.RatedUserId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(rating => new { rating.TripId, rating.RaterUserId }).IsUnique();
             entity.HasIndex(rating => new { rating.RatedUserId, rating.CreatedAt });
+        });
+
+        modelBuilder.Entity<Dispute>(entity =>
+        {
+            entity.ToTable("disputes", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_disputes_ResolutionState",
+                    "(\"Status\" IN ('Open', 'UnderReview') AND \"ResolvedAt\" IS NULL AND \"ResolvedByUserId\" IS NULL AND \"Resolution\" IS NULL) OR " +
+                    "(\"Status\" IN ('Resolved', 'Rejected') AND \"ResolvedAt\" IS NOT NULL AND \"ResolvedByUserId\" IS NOT NULL AND \"Resolution\" IS NOT NULL)");
+            });
+            entity.HasKey(dispute => dispute.Id);
+            entity.Property(dispute => dispute.Category).HasConversion<string>().HasMaxLength(32);
+            entity.Property(dispute => dispute.Subject).HasMaxLength(120).IsRequired();
+            entity.Property(dispute => dispute.Description).HasMaxLength(2000).IsRequired();
+            entity.Property(dispute => dispute.Status).HasConversion<string>().HasMaxLength(32);
+            entity.Property(dispute => dispute.Resolution).HasMaxLength(2000);
+            entity.Property(dispute => dispute.Version).IsConcurrencyToken();
+            entity.HasOne<Trip>()
+                .WithOne()
+                .HasForeignKey<Dispute>(dispute => dispute.TripId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<UserAccount>()
+                .WithMany()
+                .HasForeignKey(dispute => dispute.OpenedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<UserAccount>()
+                .WithMany()
+                .HasForeignKey(dispute => dispute.ResolvedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(dispute => dispute.TripId).IsUnique();
+            entity.HasIndex(dispute => new { dispute.Status, dispute.UpdatedAt });
+            entity.HasIndex(dispute => dispute.OpenedByUserId);
+        });
+
+        modelBuilder.Entity<DisputeMessage>(entity =>
+        {
+            entity.ToTable("dispute_messages");
+            entity.HasKey(message => message.Id);
+            entity.Property(message => message.Body).HasMaxLength(2000).IsRequired();
+            entity.HasOne<Dispute>()
+                .WithMany()
+                .HasForeignKey(message => message.DisputeId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<UserAccount>()
+                .WithMany()
+                .HasForeignKey(message => message.AuthorUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(message => new { message.DisputeId, message.CreatedAt });
         });
 
         base.OnModelCreating(modelBuilder);
