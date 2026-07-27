@@ -108,36 +108,6 @@ public sealed class TripService(
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<TripResult> AcceptAsync(
-        Guid tripId,
-        Guid driverUserId,
-        CancellationToken cancellationToken)
-    {
-        if (!await database.Users.AnyAsync(
-            user => user.Id == driverUserId &&
-                user.IsActive &&
-                user.Role == UserRole.Driver,
-            cancellationToken))
-        {
-            throw new TripAccessException("Only an active driver can accept a trip.");
-        }
-
-        if (await database.Trips.AnyAsync(
-            trip => trip.DriverUserId == driverUserId &&
-                trip.Status != TripStatus.Completed &&
-                trip.Status != TripStatus.Cancelled,
-            cancellationToken))
-        {
-            throw new ActiveTripConflictException(
-                "A driver cannot accept another trip while one is active.");
-        }
-
-        return await TransitionAsync(
-            tripId,
-            trip => trip.Accept(driverUserId, timeProvider.GetUtcNow()),
-            cancellationToken);
-    }
-
     public Task<TripResult> MarkDriverArrivedAsync(
         Guid tripId,
         Guid driverUserId,

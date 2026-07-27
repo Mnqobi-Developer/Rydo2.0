@@ -24,9 +24,15 @@ public sealed class TripStateMachineTests
             client,
             "+27820001002",
             "Driver");
+        await DriverMatchingTestClient.MakeEligibleAndOnlineAsync(
+            factory,
+            client,
+            driver,
+            1002);
+        await DriverMatchingTestClient.MatchAsync(client, passenger.AccessToken, requested.Id);
         AuthenticationTestClient.UseBearerToken(client, driver.AccessToken);
 
-        factory.Clock.Advance(TimeSpan.FromMinutes(1));
+        factory.Clock.Advance(TimeSpan.FromSeconds(15));
         var accepted = await TripTestClient.TransitionAsync(client, requested.Id, "accept");
         Assert.Equal(driver.User.Id, accepted.DriverUserId);
         Assert.Equal(TripStatus.Accepted, accepted.Status);
@@ -63,12 +69,18 @@ public sealed class TripStateMachineTests
     {
         await using var factory = new AuthenticationApiFactory();
         using var client = factory.CreateClient();
-        await TripTestClient.CreatePassengerAsync(client, "+27820001003");
+        var passenger = await TripTestClient.CreatePassengerAsync(client, "+27820001003");
         var trip = await TripTestClient.RequestAsync(client);
         var driver = await AuthenticationTestClient.SignInAsync(
             client,
             "+27820001004",
             "Driver");
+        await DriverMatchingTestClient.MakeEligibleAndOnlineAsync(
+            factory,
+            client,
+            driver,
+            1004);
+        await DriverMatchingTestClient.MatchAsync(client, passenger.AccessToken, trip.Id);
         AuthenticationTestClient.UseBearerToken(client, driver.AccessToken);
 
         var startBeforeAccept = await client.PostAsync(
@@ -88,12 +100,18 @@ public sealed class TripStateMachineTests
     {
         await using var factory = new AuthenticationApiFactory();
         using var client = factory.CreateClient();
-        await TripTestClient.CreatePassengerAsync(client, "+27820001005");
+        var passenger = await TripTestClient.CreatePassengerAsync(client, "+27820001005");
         var trip = await TripTestClient.RequestAsync(client);
         var assignedDriver = await AuthenticationTestClient.SignInAsync(
             client,
             "+27820001006",
             "Driver");
+        await DriverMatchingTestClient.MakeEligibleAndOnlineAsync(
+            factory,
+            client,
+            assignedDriver,
+            1006);
+        await DriverMatchingTestClient.MatchAsync(client, passenger.AccessToken, trip.Id);
         AuthenticationTestClient.UseBearerToken(client, assignedDriver.AccessToken);
         await TripTestClient.TransitionAsync(client, trip.Id, "accept");
 
@@ -143,6 +161,12 @@ public sealed class TripStateMachineTests
             client,
             "+27820001010",
             "Driver");
+        await DriverMatchingTestClient.MakeEligibleAndOnlineAsync(
+            factory,
+            client,
+            driver,
+            1010);
+        await DriverMatchingTestClient.MatchAsync(client, passenger.AccessToken, trip.Id);
         AuthenticationTestClient.UseBearerToken(client, driver.AccessToken);
         await TripTestClient.TransitionAsync(client, trip.Id, "accept");
         await TripTestClient.TransitionAsync(client, trip.Id, "arrive");
@@ -174,14 +198,27 @@ public sealed class TripStateMachineTests
     {
         await using var factory = new AuthenticationApiFactory();
         using var client = factory.CreateClient();
-        await TripTestClient.CreatePassengerAsync(client, "+27820001012");
+        var firstPassenger = await TripTestClient.CreatePassengerAsync(client, "+27820001012");
         var firstTrip = await TripTestClient.RequestAsync(client);
-        await TripTestClient.CreatePassengerAsync(client, "+27820001013");
+        var secondPassenger = await TripTestClient.CreatePassengerAsync(client, "+27820001013");
         var secondTrip = await TripTestClient.RequestAsync(client);
         var driver = await AuthenticationTestClient.SignInAsync(
             client,
             "+27820001014",
             "Driver");
+        await DriverMatchingTestClient.MakeEligibleAndOnlineAsync(
+            factory,
+            client,
+            driver,
+            1014);
+        await DriverMatchingTestClient.MatchAsync(
+            client,
+            firstPassenger.AccessToken,
+            firstTrip.Id);
+        await DriverMatchingTestClient.MatchAsync(
+            client,
+            secondPassenger.AccessToken,
+            secondTrip.Id);
         AuthenticationTestClient.UseBearerToken(client, driver.AccessToken);
         await TripTestClient.TransitionAsync(client, firstTrip.Id, "accept");
 
@@ -201,6 +238,12 @@ public sealed class TripStateMachineTests
             client,
             "+27820001016",
             "Driver");
+        await DriverMatchingTestClient.MakeEligibleAndOnlineAsync(
+            factory,
+            client,
+            driver,
+            1016);
+        await DriverMatchingTestClient.MatchAsync(client, passenger.AccessToken, trip.Id);
         AuthenticationTestClient.UseBearerToken(client, driver.AccessToken);
         await TripTestClient.TransitionAsync(client, trip.Id, "accept");
 

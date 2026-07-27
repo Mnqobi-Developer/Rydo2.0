@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Rydo.Application.Matching;
 using Rydo.Application.Trips;
 using Rydo.Domain.Identity;
 
@@ -12,7 +13,9 @@ namespace Rydo.Api.Controllers;
 [Authorize(Roles = "passenger,driver")]
 [EnableRateLimiting("api")]
 [Route("api/v1/trips")]
-public sealed class TripsController(ITripService trips) : ControllerBase
+public sealed class TripsController(
+    ITripService trips,
+    IDriverMatchingService matching) : ControllerBase
 {
     [HttpPost]
     [Authorize(Roles = "passenger")]
@@ -109,8 +112,43 @@ public sealed class TripsController(ITripService trips) : ControllerBase
     {
         return RunDriverTransitionAsync(
             tripId,
-            trips.AcceptAsync,
+            matching.AcceptOfferAsync,
             cancellationToken);
+    }
+
+    [HttpPost("{tripId:guid}/matching")]
+    [Authorize(Roles = "passenger")]
+    [EnableRateLimiting("trip-matching")]
+    [ProducesResponseType<TripMatchingResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<TripMatchingResult>> Match(
+        Guid tripId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetActor(out var userId, out _))
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            return Ok(await matching.MatchAsync(tripId, userId, cancellationToken));
+        }
+        catch (TripNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (TripMatchingAccessException)
+        {
+            return Forbid();
+        }
+        catch (TripMatchingStateException exception)
+        {
+            return ConflictProblem("Trip matching conflict", exception.Message);
+        }
     }
 
     [HttpPost("{tripId:guid}/arrive")]
@@ -204,6 +242,28 @@ public sealed class TripsController(ITripService trips) : ControllerBase
         catch (ActiveTripConflictException exception)
         {
             return ConflictProblem("Active trip conflict", exception.Message);
+        }
+        catch (DriverNotEligibleException exception)
+        {
+            return ConflictProblem("Driver is not eligible", exception.Message);
+        }
+        catch (DriverAvailabilityNotFoundException)
+        {
+            return ConflictProblem(
+                "Driver is unavailable",
+                "Go online before accepting a trip offer.");
+        }
+        catch (DriverAvailabilityConflictException exception)
+        {
+            return ConflictProblem("Driver availability conflict", exception.Message);
+        }
+        catch (TripOfferNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (TripMatchingStateException exception)
+        {
+            return ConflictProblem("Trip matching conflict", exception.Message);
         }
     }
 

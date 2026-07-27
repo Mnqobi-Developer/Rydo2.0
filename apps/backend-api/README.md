@@ -59,10 +59,17 @@ Production environments must supply the database connection securely through
 - `GET /api/v1/trips/me` — list trips belonging to the signed-in Passenger or Driver.
 - `GET /api/v1/trips/{tripId}` — return a trip visible to the signed-in participant.
 - `POST /api/v1/trips/{tripId}/accept` — assign the signed-in Driver to a requested trip.
+- `POST /api/v1/trips/{tripId}/matching` — offer a requested trip to nearby eligible Drivers.
 - `POST /api/v1/trips/{tripId}/arrive` — mark the assigned Driver as arrived.
 - `POST /api/v1/trips/{tripId}/start` — start an arrived trip.
 - `POST /api/v1/trips/{tripId}/complete` — complete an in-progress trip.
 - `POST /api/v1/trips/{tripId}/cancel` — cancel a trip before it starts.
+- `GET /api/v1/drivers/me/availability` — return the signed-in Driver's availability.
+- `POST /api/v1/drivers/me/availability/online` — go online with a current location.
+- `POST /api/v1/drivers/me/availability/offline` — stop receiving trip offers.
+- `POST /api/v1/drivers/me/location` — update an online Driver's current location.
+- `GET /api/v1/drivers/me/trip-offers` — list current, unexpired trip offers.
+- `POST /api/v1/drivers/me/trip-offers/{tripId}/decline` — decline an owned trip offer.
 - `/hubs/operations` — SignalR transport endpoint reserved for authorized live
   trip and operations events.
 - `/openapi/v1.json` — OpenAPI document in the Development environment only.
@@ -84,8 +91,19 @@ dotnet tool restore
 dotnet tool run dotnet-ef migrations script --idempotent --configuration Release --project src/Rydo.Infrastructure --startup-project src/Rydo.Api
 ```
 
-Matching, payments, ratings, and admin operations remain intentionally
+Payments, ratings, and admin operations remain intentionally
 separated for focused follow-up branches.
+
+## Driver matching
+
+Only Drivers with approved onboarding can go online. Matching considers online
+Drivers whose location is no more than two minutes old, excludes Drivers with
+active trips, ranks candidates by pickup distance, and offers each request to
+up to five Drivers within 20 kilometres. Offers expire after 30 seconds.
+
+Accepting an owned offer assigns the Driver through the trip state machine,
+takes that Driver offline, and expires competing offers. Database concurrency
+tokens and unique indexes protect matching decisions from duplicate responses.
 
 ## Phone authentication
 
