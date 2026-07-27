@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IAuthenticationService, AuthenticationService>();
         services.AddScoped<IDriverDocumentService, DriverDocumentService>();
         services.AddScoped<IDriverProfileService, DriverProfileService>();
+        services.AddScoped<IDriverVehicleService, DriverVehicleService>();
         services.AddScoped<IPassengerProfileService, PassengerProfileService>();
 
         if (isDevelopment)

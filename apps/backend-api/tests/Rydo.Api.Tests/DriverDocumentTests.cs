@@ -93,6 +93,7 @@ public sealed class DriverDocumentTests
         AuthenticationTestClient.UseBearerToken(client, tokens.AccessToken);
         await DriverDocumentTestClient.CreateProfileAsync(client);
         await DriverDocumentTestClient.RegisterRequiredDocumentsAsync(client);
+        await DriverVehicleTestClient.UpsertAsync(client);
         var submitResponse = await client.PostAsync(
             "/api/v1/drivers/me/onboarding/submit",
             null);

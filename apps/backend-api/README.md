@@ -53,6 +53,8 @@ Production environments must supply the database connection securely through
 - `GET /api/v1/drivers/me/documents` — list the signed-in Driver's current document metadata.
 - `GET /api/v1/drivers/me/documents/{documentId}` — return owned document metadata.
 - `POST /api/v1/drivers/me/documents` — register metadata for a protected Driver document.
+- `GET /api/v1/drivers/me/vehicle` — return the signed-in Driver's current vehicle.
+- `PUT /api/v1/drivers/me/vehicle` — create or update editable vehicle information.
 - `/hubs/operations` — SignalR transport endpoint reserved for authorized live
   trip and operations events.
 - `/openapi/v1.json` — OpenAPI document in the Development environment only.
