@@ -45,6 +45,8 @@ Production environments must supply the database connection securely through
 - `POST /api/v1/auth/refresh` — rotate a refresh token and issue a new token pair.
 - `GET /api/v1/auth/me` — return the authenticated user for an active session.
 - `POST /api/v1/auth/sessions/revoke` — revoke the current database session.
+- `GET /api/v1/passengers/me/profile` — return the signed-in Passenger's profile.
+- `PUT /api/v1/passengers/me/profile` — create or update the signed-in Passenger's profile.
 - `/hubs/operations` — SignalR transport endpoint reserved for authorized live
   trip and operations events.
 - `/openapi/v1.json` — OpenAPI document in the Development environment only.

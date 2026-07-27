@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Rydo.Domain.Identity;
+using Rydo.Domain.Passengers;
 
 namespace Rydo.Infrastructure.Persistence;
 
@@ -13,6 +14,8 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
     public DbSet<AuthSession> AuthSessions => Set<AuthSession>();
 
     public DbSet<SessionRefreshToken> RefreshTokens => Set<SessionRefreshToken>();
+
+    public DbSet<PassengerProfile> PassengerProfiles => Set<PassengerProfile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -57,6 +60,19 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
             entity.HasKey(token => token.Id);
             entity.Property(token => token.TokenHash).HasMaxLength(64).IsRequired();
             entity.HasIndex(token => token.TokenHash).IsUnique();
+        });
+
+        modelBuilder.Entity<PassengerProfile>(entity =>
+        {
+            entity.ToTable("passenger_profiles");
+            entity.HasKey(profile => profile.UserId);
+            entity.Property(profile => profile.FirstName).HasMaxLength(100).IsRequired();
+            entity.Property(profile => profile.LastName).HasMaxLength(100).IsRequired();
+            entity.Property(profile => profile.Email).HasMaxLength(254);
+            entity.HasOne<UserAccount>()
+                .WithOne()
+                .HasForeignKey<PassengerProfile>(profile => profile.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         base.OnModelCreating(modelBuilder);
