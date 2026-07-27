@@ -61,6 +61,7 @@ public sealed class DriverProfileOnboardingTests
         Assert.Equal("Nkosi", updated.LastName);
         Assert.Null(updated.Email);
 
+        await DriverDocumentTestClient.RegisterRequiredDocumentsAsync(client);
         factory.Clock.Advance(TimeSpan.FromMinutes(1));
         var submitResponse = await client.PostAsync(
             "/api/v1/drivers/me/onboarding/submit",
@@ -93,6 +94,7 @@ public sealed class DriverProfileOnboardingTests
             "/api/v1/drivers/me/profile",
             new { firstName = "Ayanda", lastName = "Khumalo", email = (string?)null });
         createResponse.EnsureSuccessStatusCode();
+        await DriverDocumentTestClient.RegisterRequiredDocumentsAsync(client);
         var submitResponse = await client.PostAsync(
             "/api/v1/drivers/me/onboarding/submit",
             null);
@@ -123,6 +125,30 @@ public sealed class DriverProfileOnboardingTests
         var response = await client.PostAsync("/api/v1/drivers/me/onboarding/submit", null);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task OnboardingSubmissionRequiresAllCoreDocuments()
+    {
+        await using var factory = new AuthenticationApiFactory();
+        using var client = factory.CreateClient();
+        var tokens = await AuthenticationTestClient.SignInAsync(
+            client,
+            "+27820000405",
+            "Driver");
+        AuthenticationTestClient.UseBearerToken(client, tokens.AccessToken);
+        await DriverDocumentTestClient.CreateProfileAsync(client);
+        await DriverDocumentTestClient.RegisterAsync(
+            client,
+            "IdentityDocument",
+            "identity.pdf");
+
+        var response = await client.PostAsync("/api/v1/drivers/me/onboarding/submit", null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("DriversLicense", body, StringComparison.Ordinal);
+        Assert.Contains("ProfessionalDrivingPermit", body, StringComparison.Ordinal);
     }
 
     [Fact]

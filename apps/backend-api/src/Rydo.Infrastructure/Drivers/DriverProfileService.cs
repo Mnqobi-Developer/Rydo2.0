@@ -10,6 +10,13 @@ public sealed class DriverProfileService(
     RydoDbContext database,
     TimeProvider timeProvider) : IDriverProfileService
 {
+    private static readonly DriverDocumentType[] RequiredDocumentTypes =
+    [
+        DriverDocumentType.IdentityDocument,
+        DriverDocumentType.DriversLicense,
+        DriverDocumentType.ProfessionalDrivingPermit,
+    ];
+
     public async Task<DriverProfileResult?> GetAsync(
         Guid userId,
         CancellationToken cancellationToken)
@@ -86,6 +93,22 @@ public sealed class DriverProfileService(
         var profile = await database.DriverProfiles
             .SingleOrDefaultAsync(item => item.UserId == userId, cancellationToken)
             ?? throw new DriverProfileNotFoundException();
+
+        var availableDocumentTypes = await database.DriverDocuments
+            .Where(document => document.DriverUserId == userId &&
+                document.SupersededAt == null &&
+                document.ReviewStatus != DriverDocumentReviewStatus.Rejected)
+            .Select(document => document.DocumentType)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var missingDocumentTypes = RequiredDocumentTypes
+            .Except(availableDocumentTypes)
+            .ToArray();
+
+        if (missingDocumentTypes.Length > 0)
+        {
+            throw new DriverOnboardingDocumentsMissingException(missingDocumentTypes);
+        }
 
         try
         {

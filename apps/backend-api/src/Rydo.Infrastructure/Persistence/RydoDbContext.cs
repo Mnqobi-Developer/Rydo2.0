@@ -20,6 +20,8 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
 
     public DbSet<DriverProfile> DriverProfiles => Set<DriverProfile>();
 
+    public DbSet<DriverDocument> DriverDocuments => Set<DriverDocument>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<UserAccount>(entity =>
@@ -93,6 +95,35 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
                 .WithOne()
                 .HasForeignKey<DriverProfile>(profile => profile.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DriverDocument>(entity =>
+        {
+            entity.ToTable("driver_documents");
+            entity.HasKey(document => document.Id);
+            entity.Property(document => document.DocumentType)
+                .HasConversion<string>()
+                .HasMaxLength(48);
+            entity.Property(document => document.StorageObjectKey).HasMaxLength(200).IsRequired();
+            entity.Property(document => document.OriginalFileName).HasMaxLength(255).IsRequired();
+            entity.Property(document => document.ContentType).HasMaxLength(64).IsRequired();
+            entity.Property(document => document.Sha256).HasMaxLength(64).IsRequired();
+            entity.Property(document => document.ReviewStatus)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+            entity.Property(document => document.RejectionReason).HasMaxLength(500);
+            entity.HasOne<UserAccount>()
+                .WithMany()
+                .HasForeignKey(document => document.DriverUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(document => document.StorageObjectKey).IsUnique();
+            entity.HasIndex(document => new
+            {
+                document.DriverUserId,
+                document.DocumentType,
+            })
+                .IsUnique()
+                .HasFilter("\"SupersededAt\" IS NULL");
         });
 
         base.OnModelCreating(modelBuilder);

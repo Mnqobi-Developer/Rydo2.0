@@ -90,6 +90,17 @@ public sealed class DriverProfilesController(IDriverProfileService driverProfile
                 Detail = exception.Message,
             });
         }
+        catch (DriverOnboardingDocumentsMissingException exception)
+        {
+            var problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Required driver documents are missing",
+                Detail = exception.Message,
+            };
+            problem.Extensions["missingDocumentTypes"] = exception.MissingDocumentTypes;
+            return Conflict(problem);
+        }
         catch (DriverOnboardingStateException exception)
         {
             return ConflictProblem(exception.Message);
