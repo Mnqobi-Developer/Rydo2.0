@@ -1,12 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Rydo.Application.System;
 
 namespace Rydo.Api.Tests;
 
-public sealed class SystemEndpointsTests(WebApplicationFactory<Program> factory)
-    : IClassFixture<WebApplicationFactory<Program>>
+public sealed class SystemEndpointsTests(AuthenticationApiFactory factory)
+    : IClassFixture<AuthenticationApiFactory>
 {
     private readonly HttpClient _client = factory.CreateClient();
 

@@ -150,6 +150,14 @@ jobs:
       - name: Build
         run: dotnet build Rydo.Backend.slnx --no-restore --configuration Release
 
+      - name: Verify database migration
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+        run: |
+          dotnet tool restore
+          dotnet tool run dotnet-ef migrations has-pending-model-changes --no-build --configuration Release --project src/Rydo.Infrastructure --startup-project src/Rydo.Api
+          dotnet tool run dotnet-ef migrations script --idempotent --no-build --configuration Release --project src/Rydo.Infrastructure --startup-project src/Rydo.Api --output ${{ runner.temp }}/rydo-migrations.sql
+
       - name: Test
         run: dotnet test Rydo.Backend.slnx --no-build --configuration Release
 

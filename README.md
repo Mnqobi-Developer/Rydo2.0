@@ -20,8 +20,9 @@ stable contracts and visual primitives.
 ## Current milestone
 
 Passenger, Driver, Admin, and Backend application foundations are now
-established. Product features are intentionally delivered later through
-focused pull requests.
+established. The first backend vertical slice adds Passenger and Driver phone
+authentication with OTP verification and revocable token sessions. Remaining
+product features continue through focused pull requests.
 
 ## Passenger app
 
