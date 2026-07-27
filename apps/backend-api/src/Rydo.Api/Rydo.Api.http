@@ -1,0 +1,10 @@
+@Rydo_Api_HostAddress = http://localhost:5190
+
+GET {{Rydo_Api_HostAddress}}/health/live
+
+###
+
+GET {{Rydo_Api_HostAddress}}/api/v1/system
+Accept: application/json
+
+###

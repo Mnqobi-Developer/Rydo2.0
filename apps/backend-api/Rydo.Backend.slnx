@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Rydo.Api/Rydo.Api.csproj" />
+    <Project Path="src/Rydo.Application/Rydo.Application.csproj" />
+    <Project Path="src/Rydo.Domain/Rydo.Domain.csproj" />
+    <Project Path="src/Rydo.Infrastructure/Rydo.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Rydo.Api.Tests/Rydo.Api.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -23,13 +23,19 @@ The Admin dashboard job independently performs:
 5. A production Vite build.
 6. Production dependency auditing at the high severity threshold.
 
+The Backend API job uses committed NuGet lockfiles and performs:
+
+1. A locked dependency restore with transitive vulnerability auditing.
+2. Deterministic formatting verification.
+3. A Release configuration build with warnings treated as errors.
+4. ASP.NET Core API integration tests.
+5. A transitive vulnerable dependency report.
+
 The workflow has read-only repository permissions, cancels obsolete runs for the
 same branch, and limits the job to 15 minutes.
 
-## Expansion
-
-The Backend API job will be introduced with its foundation branch. Each job
-retains a stable name so it can become a required branch-protection check.
+Each application job retains a stable name so it can become a required
+branch-protection check.
 
 Deployment is intentionally excluded during local-first development. Staging
 and production promotion jobs will be added only after hosting environments are
