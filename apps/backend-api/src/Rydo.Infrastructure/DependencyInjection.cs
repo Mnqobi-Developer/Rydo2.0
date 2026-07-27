@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Rydo.Application.Authentication;
+using Rydo.Application.Passengers;
 using Rydo.Infrastructure.Authentication;
+using Rydo.Infrastructure.Passengers;
 using Rydo.Infrastructure.Persistence;
 
 namespace Rydo.Infrastructure;
@@ -31,6 +33,7 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<CryptoTokenService>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
+        services.AddScoped<IPassengerProfileService, PassengerProfileService>();
 
         if (isDevelopment)
         {
