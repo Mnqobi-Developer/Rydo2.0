@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<CryptoTokenService>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
+        services.AddScoped<IDriverDocumentService, DriverDocumentService>();
         services.AddScoped<IDriverProfileService, DriverProfileService>();
         services.AddScoped<IPassengerProfileService, PassengerProfileService>();
 
