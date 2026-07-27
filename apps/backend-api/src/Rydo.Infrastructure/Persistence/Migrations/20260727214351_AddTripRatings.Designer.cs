@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Rydo.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Rydo.Infrastructure.Persistence;
 namespace Rydo.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(RydoDbContext))]
-    partial class RydoDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260727214351_AddTripRatings")]
+    partial class AddTripRatings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
