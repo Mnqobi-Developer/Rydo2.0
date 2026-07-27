@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Rydo.Domain.Drivers;
 using Rydo.Domain.Identity;
+using Rydo.Domain.Matching;
 using Rydo.Domain.Passengers;
 using Rydo.Domain.Trips;
 
@@ -26,6 +27,10 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
     public DbSet<DriverVehicle> DriverVehicles => Set<DriverVehicle>();
 
     public DbSet<Trip> Trips => Set<Trip>();
+
+    public DbSet<DriverAvailability> DriverAvailability => Set<DriverAvailability>();
+
+    public DbSet<TripOffer> TripOffers => Set<TripOffer>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -203,6 +208,62 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
                 .HasFilter(
                     "\"DriverUserId\" IS NOT NULL AND \"Status\" IN ('Accepted', 'DriverArrived', 'InProgress')");
             entity.HasIndex(trip => new { trip.Status, trip.RequestedAt });
+        });
+
+        modelBuilder.Entity<DriverAvailability>(entity =>
+        {
+            entity.ToTable("driver_availability", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_driver_availability_Latitude",
+                    "\"Latitude\" BETWEEN -90 AND 90");
+                table.HasCheckConstraint(
+                    "CK_driver_availability_Longitude",
+                    "\"Longitude\" BETWEEN -180 AND 180");
+            });
+            entity.HasKey(availability => availability.DriverUserId);
+            entity.Property(availability => availability.Version).IsConcurrencyToken();
+            entity.HasOne<UserAccount>()
+                .WithOne()
+                .HasForeignKey<DriverAvailability>(availability => availability.DriverUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(availability => new
+            {
+                availability.IsOnline,
+                availability.LocationUpdatedAt,
+            });
+        });
+
+        modelBuilder.Entity<TripOffer>(entity =>
+        {
+            entity.ToTable("trip_offers", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_trip_offers_PickupDistanceKilometres",
+                    "\"PickupDistanceKilometres\" >= 0");
+                table.HasCheckConstraint(
+                    "CK_trip_offers_Expiry",
+                    "\"ExpiresAt\" > \"OfferedAt\"");
+            });
+            entity.HasKey(offer => offer.Id);
+            entity.Property(offer => offer.Status).HasConversion<string>().HasMaxLength(24);
+            entity.Property(offer => offer.Version).IsConcurrencyToken();
+            entity.HasOne<Trip>()
+                .WithMany()
+                .HasForeignKey(offer => offer.TripId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<UserAccount>()
+                .WithMany()
+                .HasForeignKey(offer => offer.DriverUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(offer => new { offer.TripId, offer.DriverUserId }).IsUnique();
+            entity.HasIndex(offer => new
+            {
+                offer.DriverUserId,
+                offer.Status,
+                offer.ExpiresAt,
+            });
+            entity.HasIndex(offer => new { offer.TripId, offer.Status });
         });
 
         base.OnModelCreating(modelBuilder);

@@ -48,11 +48,6 @@ public interface ITripService
         UserRole role,
         CancellationToken cancellationToken);
 
-    Task<TripResult> AcceptAsync(
-        Guid tripId,
-        Guid driverUserId,
-        CancellationToken cancellationToken);
-
     Task<TripResult> MarkDriverArrivedAsync(
         Guid tripId,
         Guid driverUserId,

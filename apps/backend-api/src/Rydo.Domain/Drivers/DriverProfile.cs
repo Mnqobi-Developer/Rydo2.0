@@ -95,6 +95,20 @@ public sealed class DriverProfile
         UpdatedAt = submittedAt;
     }
 
+    public void Approve(DateTimeOffset reviewedAt)
+    {
+        if (OnboardingStatus != DriverOnboardingStatus.PendingReview)
+        {
+            throw new InvalidOperationException(
+                "Only a driver pending review can be approved.");
+        }
+
+        OnboardingStatus = DriverOnboardingStatus.Approved;
+        ReviewedAt = reviewedAt;
+        RejectionReason = null;
+        UpdatedAt = reviewedAt;
+    }
+
     private static string NormalizeName(string value)
     {
         return value.Trim();
