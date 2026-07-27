@@ -110,6 +110,16 @@ public sealed class DriverProfileService(
             throw new DriverOnboardingDocumentsMissingException(missingDocumentTypes);
         }
 
+        var hasCurrentVehicle = await database.DriverVehicles.AnyAsync(
+            vehicle => vehicle.DriverUserId == userId &&
+                vehicle.ReviewStatus != DriverVehicleReviewStatus.Rejected,
+            cancellationToken);
+
+        if (!hasCurrentVehicle)
+        {
+            throw new DriverOnboardingVehicleMissingException();
+        }
+
         try
         {
             profile.Submit(timeProvider.GetUtcNow());

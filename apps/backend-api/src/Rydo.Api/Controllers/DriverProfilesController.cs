@@ -101,6 +101,15 @@ public sealed class DriverProfilesController(IDriverProfileService driverProfile
             problem.Extensions["missingDocumentTypes"] = exception.MissingDocumentTypes;
             return Conflict(problem);
         }
+        catch (DriverOnboardingVehicleMissingException exception)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Driver vehicle is missing",
+                Detail = exception.Message,
+            });
+        }
         catch (DriverOnboardingStateException exception)
         {
             return ConflictProblem(exception.Message);

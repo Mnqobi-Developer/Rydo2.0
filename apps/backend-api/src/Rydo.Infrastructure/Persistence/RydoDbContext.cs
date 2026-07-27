@@ -22,6 +22,8 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
 
     public DbSet<DriverDocument> DriverDocuments => Set<DriverDocument>();
 
+    public DbSet<DriverVehicle> DriverVehicles => Set<DriverVehicle>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<UserAccount>(entity =>
@@ -124,6 +126,38 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
             })
                 .IsUnique()
                 .HasFilter("\"SupersededAt\" IS NULL");
+        });
+
+        modelBuilder.Entity<DriverVehicle>(entity =>
+        {
+            entity.ToTable("driver_vehicles", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_driver_vehicles_Year",
+                    "\"Year\" BETWEEN 1980 AND 2100");
+                table.HasCheckConstraint(
+                    "CK_driver_vehicles_SeatCapacity",
+                    "\"SeatCapacity\" BETWEEN 1 AND 16");
+            });
+            entity.HasKey(vehicle => vehicle.Id);
+            entity.Property(vehicle => vehicle.Make).HasMaxLength(100).IsRequired();
+            entity.Property(vehicle => vehicle.Model).HasMaxLength(100).IsRequired();
+            entity.Property(vehicle => vehicle.Color).HasMaxLength(50).IsRequired();
+            entity.Property(vehicle => vehicle.RegistrationNumber).HasMaxLength(16).IsRequired();
+            entity.Property(vehicle => vehicle.VehicleIdentificationNumber)
+                .HasMaxLength(17)
+                .IsRequired();
+            entity.Property(vehicle => vehicle.ReviewStatus)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+            entity.Property(vehicle => vehicle.RejectionReason).HasMaxLength(500);
+            entity.HasOne<UserAccount>()
+                .WithOne()
+                .HasForeignKey<DriverVehicle>(vehicle => vehicle.DriverUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(vehicle => vehicle.DriverUserId).IsUnique();
+            entity.HasIndex(vehicle => vehicle.RegistrationNumber).IsUnique();
+            entity.HasIndex(vehicle => vehicle.VehicleIdentificationNumber).IsUnique();
         });
 
         base.OnModelCreating(modelBuilder);
