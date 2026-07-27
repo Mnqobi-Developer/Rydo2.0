@@ -11,17 +11,17 @@ operations teams.
   TypeScript.
 - `apps/admin-dashboard` — Desktop operations dashboard built with React,
   TypeScript, and Vite.
-- `apps/backend-api` — ASP.NET Core API and SignalR service. Added in its own
-  foundation branch.
+- `apps/backend-api` — Layered ASP.NET Core API with SignalR and
+  PostgreSQL/PostGIS-ready persistence.
 
 Shared packages will live under `packages/` as the applications begin to share
 stable contracts and visual primitives.
 
 ## Current milestone
 
-Passenger, Driver, and Admin application foundations are now established.
-Product features are intentionally delivered later through focused pull
-requests.
+Passenger, Driver, Admin, and Backend application foundations are now
+established. Product features are intentionally delivered later through
+focused pull requests.
 
 ## Passenger app
 
@@ -40,6 +40,13 @@ on the same network.
 cd apps/admin-dashboard
 npm install
 npm run dev
+```
+
+## Backend API
+
+```powershell
+docker compose -f apps/backend-api/compose.yaml up -d
+dotnet run --project apps/backend-api/src/Rydo.Api
 ```
 
 ## Delivery
