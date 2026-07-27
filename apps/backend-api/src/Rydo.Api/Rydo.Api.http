@@ -8,3 +8,13 @@ GET {{Rydo_Api_HostAddress}}/api/v1/system
 Accept: application/json
 
 ###
+
+POST {{Rydo_Api_HostAddress}}/api/v1/auth/otp/request
+Content-Type: application/json
+
+{
+  "phoneNumber": "+27820000000",
+  "role": "Passenger"
+}
+
+###

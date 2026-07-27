@@ -28,8 +28,9 @@ The Backend API job uses committed NuGet lockfiles and performs:
 1. A locked dependency restore with transitive vulnerability auditing.
 2. Deterministic formatting verification.
 3. A Release configuration build with warnings treated as errors.
-4. ASP.NET Core API integration tests.
-5. A transitive vulnerable dependency report.
+4. Idempotent EF Core migration script generation.
+5. ASP.NET Core API integration and security tests.
+6. A transitive vulnerable dependency report.
 
 The workflow has read-only repository permissions, cancels obsolete runs for the
 same branch, and limits the job to 15 minutes.
