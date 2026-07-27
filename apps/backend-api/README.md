@@ -47,6 +47,9 @@ Production environments must supply the database connection securely through
 - `POST /api/v1/auth/sessions/revoke` — revoke the current database session.
 - `GET /api/v1/passengers/me/profile` — return the signed-in Passenger's profile.
 - `PUT /api/v1/passengers/me/profile` — create or update the signed-in Passenger's profile.
+- `GET /api/v1/drivers/me/profile` — return the signed-in Driver's profile and onboarding state.
+- `PUT /api/v1/drivers/me/profile` — create or update an editable Driver profile.
+- `POST /api/v1/drivers/me/onboarding/submit` — submit a completed Driver profile for review.
 - `/hubs/operations` — SignalR transport endpoint reserved for authorized live
   trip and operations events.
 - `/openapi/v1.json` — OpenAPI document in the Development environment only.
