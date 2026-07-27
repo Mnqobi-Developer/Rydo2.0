@@ -460,6 +460,7 @@ public sealed class DriverMatchingService(
             trip.CancelledAt,
             trip.CancelledByUserId,
             trip.CancellationReason,
+            trip.FinalFareAmount,
             trip.Version);
     }
 

@@ -3,6 +3,7 @@ using Rydo.Domain.Drivers;
 using Rydo.Domain.Identity;
 using Rydo.Domain.Matching;
 using Rydo.Domain.Passengers;
+using Rydo.Domain.Payments;
 using Rydo.Domain.Trips;
 
 namespace Rydo.Infrastructure.Persistence;
@@ -31,6 +32,10 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
     public DbSet<DriverAvailability> DriverAvailability => Set<DriverAvailability>();
 
     public DbSet<TripOffer> TripOffers => Set<TripOffer>();
+
+    public DbSet<Payment> Payments => Set<Payment>();
+
+    public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -184,12 +189,16 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
                 table.HasCheckConstraint(
                     "CK_trips_DestinationLongitude",
                     "\"DestinationLongitude\" BETWEEN -180 AND 180");
+                table.HasCheckConstraint(
+                    "CK_trips_FinalFareAmount",
+                    "\"FinalFareAmount\" IS NULL OR \"FinalFareAmount\" > 0");
             });
             entity.HasKey(trip => trip.Id);
             entity.Property(trip => trip.PickupAddress).HasMaxLength(300).IsRequired();
             entity.Property(trip => trip.DestinationAddress).HasMaxLength(300).IsRequired();
             entity.Property(trip => trip.Status).HasConversion<string>().HasMaxLength(32);
             entity.Property(trip => trip.CancellationReason).HasMaxLength(250);
+            entity.Property(trip => trip.FinalFareAmount).HasPrecision(12, 2);
             entity.Property(trip => trip.Version).IsConcurrencyToken();
             entity.HasOne<UserAccount>()
                 .WithMany()
@@ -264,6 +273,62 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
                 offer.ExpiresAt,
             });
             entity.HasIndex(offer => new { offer.TripId, offer.Status });
+        });
+
+        modelBuilder.Entity<Payment>(entity =>
+        {
+            entity.ToTable("payments", table =>
+            {
+                table.HasCheckConstraint("CK_payments_Amount", "\"Amount\" > 0");
+                table.HasCheckConstraint("CK_payments_Currency", "\"Currency\" = 'ZAR'");
+            });
+            entity.HasKey(payment => payment.Id);
+            entity.Property(payment => payment.Method).HasConversion<string>().HasMaxLength(24);
+            entity.Property(payment => payment.Status).HasConversion<string>().HasMaxLength(32);
+            entity.Property(payment => payment.Amount).HasPrecision(12, 2);
+            entity.Property(payment => payment.Currency).HasMaxLength(3).IsRequired();
+            entity.Property(payment => payment.ProviderPaymentId).HasMaxLength(100);
+            entity.Property(payment => payment.FailureReason).HasMaxLength(500);
+            entity.Property(payment => payment.Version).IsConcurrencyToken();
+            entity.HasOne<Trip>()
+                .WithOne()
+                .HasForeignKey<Payment>(payment => payment.TripId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<UserAccount>()
+                .WithMany()
+                .HasForeignKey(payment => payment.PassengerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(payment => payment.TripId).IsUnique();
+            entity.HasIndex(payment => payment.ProviderPaymentId)
+                .IsUnique()
+                .HasFilter("\"ProviderPaymentId\" IS NOT NULL");
+            entity.HasIndex(payment => new { payment.Status, payment.CreatedAt });
+        });
+
+        modelBuilder.Entity<PaymentEvent>(entity =>
+        {
+            entity.ToTable("payment_events");
+            entity.HasKey(paymentEvent => paymentEvent.Id);
+            entity.Property(paymentEvent => paymentEvent.Provider).HasMaxLength(32).IsRequired();
+            entity.Property(paymentEvent => paymentEvent.EventType).HasMaxLength(64).IsRequired();
+            entity.Property(paymentEvent => paymentEvent.ProviderEventId).HasMaxLength(100);
+            entity.Property(paymentEvent => paymentEvent.FailureReason).HasMaxLength(500);
+            entity.Property(paymentEvent => paymentEvent.PayloadSha256).HasMaxLength(64).IsRequired();
+            entity.Property(paymentEvent => paymentEvent.RemoteIpAddress).HasMaxLength(64);
+            entity.HasOne<Payment>()
+                .WithMany()
+                .HasForeignKey(paymentEvent => paymentEvent.PaymentId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(paymentEvent => new
+            {
+                paymentEvent.Provider,
+                paymentEvent.ProviderEventId,
+            });
+            entity.HasIndex(paymentEvent => new
+            {
+                paymentEvent.PaymentId,
+                paymentEvent.ReceivedAt,
+            });
         });
 
         base.OnModelCreating(modelBuilder);

@@ -11,6 +11,16 @@ namespace Rydo.Api.Tests;
 public sealed class AuthenticationApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"rydo-auth-tests-{Guid.NewGuid():N}";
+    private readonly Action<IServiceCollection>? _configureTestServices;
+
+    public AuthenticationApiFactory()
+    {
+    }
+
+    internal AuthenticationApiFactory(Action<IServiceCollection> configureTestServices)
+    {
+        _configureTestServices = configureTestServices;
+    }
 
     public AdjustableTimeProvider Clock { get; } = new();
 
@@ -25,6 +35,7 @@ public sealed class AuthenticationApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<TimeProvider>(Clock);
             services.AddDbContext<RydoDbContext>(options =>
                 options.UseInMemoryDatabase(_databaseName));
+            _configureTestServices?.Invoke(services);
         });
     }
 }

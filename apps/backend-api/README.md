@@ -70,6 +70,10 @@ Production environments must supply the database connection securely through
 - `POST /api/v1/drivers/me/location` — update an online Driver's current location.
 - `GET /api/v1/drivers/me/trip-offers` — list current, unexpired trip offers.
 - `POST /api/v1/drivers/me/trip-offers/{tripId}/decline` — decline an owned trip offer.
+- `POST /api/v1/trips/{tripId}/payments` — create the trip's Cash or PayFast payment.
+- `GET /api/v1/trips/{tripId}/payment` — return payment state to a trip participant.
+- `POST /api/v1/payments/{paymentId}/cash/confirm` — let the assigned Driver confirm completed-trip cash.
+- `POST /api/v1/payments/payfast/notify` — receive PayFast's public ITN callback.
 - `/hubs/operations` — SignalR transport endpoint reserved for authorized live
   trip and operations events.
 - `/openapi/v1.json` — OpenAPI document in the Development environment only.
@@ -104,6 +108,31 @@ up to five Drivers within 20 kilometres. Offers expire after 30 seconds.
 Accepting an owned offer assigns the Driver through the trip state machine,
 takes that Driver offline, and expires competing offers. Database concurrency
 tokens and unique indexes protect matching decisions from duplicate responses.
+
+## Payments and PayFast
+
+Payment amounts come only from the server-finalized trip fare; mobile clients do
+not submit or override charge amounts. Cash payments can be recorded now. A
+PayFast payment returns a signed hosted-checkout form only when PayFast is fully
+configured. PayFast is intentionally disabled by default while merchant setup
+is pending.
+
+When the Sandbox dashboard is ready, configure these through secrets or
+environment variables and set `PayFast__Enabled=true`:
+
+- `PayFast__MerchantId`
+- `PayFast__MerchantKey`
+- `PayFast__Passphrase`
+- `PayFast__ReturnUrl`
+- `PayFast__CancelUrl`
+- `PayFast__NotifyUrl`
+
+The three URLs must be public HTTPS URLs. The notify URL should point to
+`https://api.rydo.co.za/api/v1/payments/payfast/notify`; PayFast cannot deliver
+ITNs to localhost. Before a callback changes payment state, the API checks its
+signature, merchant, source IP range, exact ZAR amount, provider transaction ID,
+and PayFast server confirmation. Callback payloads are represented only by a
+SHA-256 hash in the audit table rather than being stored with customer data.
 
 ## Phone authentication
 

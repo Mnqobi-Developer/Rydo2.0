@@ -5,11 +5,13 @@ using Rydo.Application.Authentication;
 using Rydo.Application.Drivers;
 using Rydo.Application.Matching;
 using Rydo.Application.Passengers;
+using Rydo.Application.Payments;
 using Rydo.Application.Trips;
 using Rydo.Infrastructure.Authentication;
 using Rydo.Infrastructure.Drivers;
 using Rydo.Infrastructure.Matching;
 using Rydo.Infrastructure.Passengers;
+using Rydo.Infrastructure.Payments;
 using Rydo.Infrastructure.Persistence;
 using Rydo.Infrastructure.Trips;
 
@@ -44,7 +46,12 @@ public static class DependencyInjection
         services.AddScoped<IDriverVehicleService, DriverVehicleService>();
         services.AddScoped<IDriverMatchingService, DriverMatchingService>();
         services.AddScoped<IPassengerProfileService, PassengerProfileService>();
+        services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<ITripService, TripService>();
+        services.AddOptions<PayFastOptions>()
+            .Bind(configuration.GetSection(PayFastOptions.SectionName));
+        services.AddSingleton<PayFastHttpClient>();
+        services.AddScoped<IPayFastGateway, PayFastGateway>();
 
         if (isDevelopment)
         {
