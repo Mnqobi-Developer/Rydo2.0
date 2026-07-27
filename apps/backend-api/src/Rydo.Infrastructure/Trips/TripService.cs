@@ -220,6 +220,7 @@ public sealed class TripService(
             trip.CancelledAt,
             trip.CancelledByUserId,
             trip.CancellationReason,
+            trip.FinalFareAmount,
             trip.Version));
     }
 
@@ -245,6 +246,7 @@ public sealed class TripService(
             trip.CancelledAt,
             trip.CancelledByUserId,
             trip.CancellationReason,
+            trip.FinalFareAmount,
             trip.Version);
     }
 }

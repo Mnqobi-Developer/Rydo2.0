@@ -23,6 +23,7 @@ public sealed record TripResult(
     DateTimeOffset? CancelledAt,
     Guid? CancelledByUserId,
     string? CancellationReason,
+    decimal? FinalFareAmount,
     int Version);
 
 public interface ITripService

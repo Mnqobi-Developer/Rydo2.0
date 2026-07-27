@@ -71,6 +71,8 @@ public sealed class Trip
 
     public string? CancellationReason { get; private set; }
 
+    public decimal? FinalFareAmount { get; private set; }
+
     public int Version { get; private set; }
 
     public bool IsActive => Status is not TripStatus.Completed and not TripStatus.Cancelled;
@@ -135,6 +137,23 @@ public sealed class Trip
         RequireStatus(TripStatus.InProgress, "complete");
         CompletedAt = completedAt;
         TransitionTo(TripStatus.Completed, completedAt);
+    }
+
+    public void FinalizeFare(decimal amount, DateTimeOffset updatedAt)
+    {
+        if (amount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(amount), "Fare amount must be positive.");
+        }
+
+        if (FinalFareAmount is not null)
+        {
+            throw new InvalidOperationException("The final fare has already been recorded.");
+        }
+
+        FinalFareAmount = decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
+        UpdatedAt = updatedAt;
+        Version++;
     }
 
     public void Cancel(
