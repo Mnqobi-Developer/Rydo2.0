@@ -8,7 +8,7 @@ operations teams.
 - `apps/passenger-mobile` — Passenger app built with React Native, Expo Router,
   and TypeScript.
 - `apps/driver-mobile` — Driver app built with React Native, Expo Router, and
-  TypeScript. Added in its own foundation branch.
+  TypeScript.
 - `apps/admin-dashboard` — Desktop operations dashboard. Added in its own
   foundation branch.
 - `apps/backend-api` — ASP.NET Core API and SignalR service. Added in its own
