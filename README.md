@@ -9,8 +9,8 @@ operations teams.
   and TypeScript.
 - `apps/driver-mobile` — Driver app built with React Native, Expo Router, and
   TypeScript.
-- `apps/admin-dashboard` — Desktop operations dashboard. Added in its own
-  foundation branch.
+- `apps/admin-dashboard` — Desktop operations dashboard built with React,
+  TypeScript, and Vite.
 - `apps/backend-api` — ASP.NET Core API and SignalR service. Added in its own
   foundation branch.
 
@@ -19,8 +19,9 @@ stable contracts and visual primitives.
 
 ## Current milestone
 
-The repository foundation starts with the Passenger mobile shell. Product
-features are intentionally delivered later through focused pull requests.
+Passenger, Driver, and Admin application foundations are now established.
+Product features are intentionally delivered later through focused pull
+requests.
 
 ## Passenger app
 
@@ -32,6 +33,14 @@ npm run start
 
 Scan the Metro QR code with Expo Go while the development machine and phone are
 on the same network.
+
+## Admin dashboard
+
+```powershell
+cd apps/admin-dashboard
+npm install
+npm run dev
+```
 
 ## Delivery
 
