@@ -14,14 +14,22 @@ and perform:
 4. Expo project compatibility checks.
 5. Production dependency auditing at the high severity threshold.
 
+The Admin dashboard job independently performs:
+
+1. Deterministic dependency installation with `npm ci`.
+2. Oxlint static analysis.
+3. TypeScript compilation without output.
+4. Vitest component tests in a browser-like environment.
+5. A production Vite build.
+6. Production dependency auditing at the high severity threshold.
+
 The workflow has read-only repository permissions, cancels obsolete runs for the
 same branch, and limits the job to 15 minutes.
 
 ## Expansion
 
-Admin dashboard and Backend API jobs will be introduced with their respective
-foundation branches. Each job retains a stable name so it can become a required
-branch-protection check.
+The Backend API job will be introduced with its foundation branch. Each job
+retains a stable name so it can become a required branch-protection check.
 
 Deployment is intentionally excluded during local-first development. Staging
 and production promotion jobs will be added only after hosting environments are
