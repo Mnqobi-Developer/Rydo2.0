@@ -74,6 +74,10 @@ Production environments must supply the database connection securely through
 - `GET /api/v1/trips/{tripId}/payment` — return payment state to a trip participant.
 - `POST /api/v1/payments/{paymentId}/cash/confirm` — let the assigned Driver confirm completed-trip cash.
 - `POST /api/v1/payments/payfast/notify` — receive PayFast's public ITN callback.
+- `POST /api/v1/trips/{tripId}/ratings` — rate the other participant after trip completion.
+- `GET /api/v1/trips/{tripId}/ratings/me` — return the signed-in participant's own rating.
+- `GET /api/v1/ratings/me/summary` — return aggregate ratings received by the signed-in user.
+- `GET /api/v1/drivers/{driverUserId}/ratings/summary` — return a Driver's aggregate rating summary.
 - `/hubs/operations` — SignalR transport endpoint reserved for authorized live
   trip and operations events.
 - `/openapi/v1.json` — OpenAPI document in the Development environment only.
@@ -95,8 +99,17 @@ dotnet tool restore
 dotnet tool run dotnet-ef migrations script --idempotent --configuration Release --project src/Rydo.Infrastructure --startup-project src/Rydo.Api
 ```
 
-Payments, ratings, and admin operations remain intentionally
+Admin operations remain intentionally
 separated for focused follow-up branches.
+
+## Ratings
+
+Passengers and assigned Drivers may rate each other only after a completed
+trip. Each participant can submit one immutable rating per trip. Repeating the
+same normalized score and comment is idempotent; attempting to replace it is a
+conflict. Free-text comments are visible only to their author through the
+trip-specific endpoint. Driver and personal summaries expose aggregate
+scores and distributions without comments.
 
 ## Driver matching
 

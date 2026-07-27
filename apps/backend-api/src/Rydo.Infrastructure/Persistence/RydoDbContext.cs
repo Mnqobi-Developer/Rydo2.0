@@ -4,6 +4,7 @@ using Rydo.Domain.Identity;
 using Rydo.Domain.Matching;
 using Rydo.Domain.Passengers;
 using Rydo.Domain.Payments;
+using Rydo.Domain.Ratings;
 using Rydo.Domain.Trips;
 
 namespace Rydo.Infrastructure.Persistence;
@@ -36,6 +37,8 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
     public DbSet<Payment> Payments => Set<Payment>();
 
     public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
+
+    public DbSet<Rating> Ratings => Set<Rating>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -329,6 +332,19 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
                 paymentEvent.PaymentId,
                 paymentEvent.ReceivedAt,
             });
+        });
+
+        modelBuilder.Entity<Rating>(entity =>
+        {
+            entity.ToTable("ratings", table =>
+                table.HasCheckConstraint("CK_ratings_Score", "\"Score\" BETWEEN 1 AND 5"));
+            entity.HasKey(rating => rating.Id);
+            entity.Property(rating => rating.Comment).HasMaxLength(500);
+            entity.HasOne<Trip>().WithMany().HasForeignKey(rating => rating.TripId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<UserAccount>().WithMany().HasForeignKey(rating => rating.RaterUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<UserAccount>().WithMany().HasForeignKey(rating => rating.RatedUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(rating => new { rating.TripId, rating.RaterUserId }).IsUnique();
+            entity.HasIndex(rating => new { rating.RatedUserId, rating.CreatedAt });
         });
 
         base.OnModelCreating(modelBuilder);
