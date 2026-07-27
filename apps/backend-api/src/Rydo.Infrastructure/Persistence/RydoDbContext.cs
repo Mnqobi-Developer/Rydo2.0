@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Rydo.Domain.Drivers;
 using Rydo.Domain.Identity;
 using Rydo.Domain.Passengers;
 
@@ -16,6 +17,8 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
     public DbSet<SessionRefreshToken> RefreshTokens => Set<SessionRefreshToken>();
 
     public DbSet<PassengerProfile> PassengerProfiles => Set<PassengerProfile>();
+
+    public DbSet<DriverProfile> DriverProfiles => Set<DriverProfile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -72,6 +75,23 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
             entity.HasOne<UserAccount>()
                 .WithOne()
                 .HasForeignKey<PassengerProfile>(profile => profile.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DriverProfile>(entity =>
+        {
+            entity.ToTable("driver_profiles");
+            entity.HasKey(profile => profile.UserId);
+            entity.Property(profile => profile.FirstName).HasMaxLength(100).IsRequired();
+            entity.Property(profile => profile.LastName).HasMaxLength(100).IsRequired();
+            entity.Property(profile => profile.Email).HasMaxLength(254);
+            entity.Property(profile => profile.OnboardingStatus)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+            entity.Property(profile => profile.RejectionReason).HasMaxLength(500);
+            entity.HasOne<UserAccount>()
+                .WithOne()
+                .HasForeignKey<DriverProfile>(profile => profile.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
