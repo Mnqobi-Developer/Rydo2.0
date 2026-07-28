@@ -89,6 +89,20 @@ describe('API client', () => {
     expect(await tokenStore.get()).toEqual(newTokens);
   });
 
+  it('provides SignalR with a fresh access token without exposing the refresh token', async () => {
+    const expiringTokens = tokenPair('expiring-access', 'valid-refresh', {
+      accessTokenExpiresAt: '2026-07-28T12:00:30Z',
+    });
+    const tokenStore = memoryTokenStore(expiringTokens);
+    const fetchMock = vi.fn(async () => jsonResponse(newTokens));
+    const client = createClient(fetchMock, tokenStore, {
+      now: () => Date.parse('2026-07-28T12:00:00Z'),
+    });
+
+    await expect(client.auth.getAccessToken()).resolves.toBe('new-access');
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it('expires locally without a network request when the refresh token is expired', async () => {
     const expiredTokens = tokenPair('expired-access', 'expired-refresh', {
       accessTokenExpiresAt: '2026-07-28T11:00:00Z',

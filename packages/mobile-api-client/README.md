@@ -13,6 +13,8 @@ It provides:
 - normalized ASP.NET Core problem-detail, network, timeout, and cancellation errors;
 - bounded retries for safe requests only; and
 - consistently shared TanStack Query defaults instantiated by each app.
+- a typed SignalR lifecycle foundation using the backend's exact operations
+  event contract.
 
 Refresh requests are deliberately never retried. The backend rotates refresh
 tokens and treats replay as a session-compromise signal, so retrying after an
@@ -37,3 +39,8 @@ useQuery({
 The transport owns bounded network retries. TanStack Query retrying is disabled
 to prevent multiplicative retries; mutations are never retried unless a caller
 explicitly supplies `retry: 'always'` for an idempotent operation.
+
+SignalR receives access tokens through `auth.getAccessToken()`, which performs
+the same proactive single-flight rotation as REST requests without exposing the
+refresh token. See [Mobile real-time](../../docs/mobile-realtime.md) for app
+lifecycle and REST reconciliation behavior.
