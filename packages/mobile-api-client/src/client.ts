@@ -1,4 +1,5 @@
 import type {
+  AuthSessionSnapshot,
   AuthenticatedUser,
   OtpRequestResult,
   RefreshTokenRequest,
@@ -29,6 +30,8 @@ export interface ApiClientOptions {
   fetch?: typeof globalThis.fetch;
   requestTimeoutMs?: number;
   maximumRetries?: number;
+  refreshLeewayMs?: number;
+  now?: () => number;
   onAuthenticationExpired?: () => void | Promise<void>;
   sleep?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
 }
@@ -67,6 +70,11 @@ export interface ApiClient {
     requestOtp(request: RequestOtpRequest, signal?: AbortSignal): Promise<OtpRequestResult>;
     verifyOtp(request: VerifyOtpRequest, signal?: AbortSignal): Promise<TokenPair>;
     me(signal?: AbortSignal): Promise<AuthenticatedUser>;
+    getSnapshot(): AuthSessionSnapshot;
+    subscribe(listener: () => void): () => void;
+    restoreSession(signal?: AbortSignal): Promise<AuthSessionSnapshot>;
+    refreshSession(): Promise<TokenPair>;
+    logout(signal?: AbortSignal): Promise<void>;
     revokeSession(signal?: AbortSignal): Promise<void>;
   };
 }
@@ -79,22 +87,57 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   const fetchImplementation = options.fetch ?? globalThis.fetch;
   const requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
   const maximumRetries = options.maximumRetries ?? 2;
+  const refreshLeewayMs = options.refreshLeewayMs ?? 60_000;
+  const now = options.now ?? Date.now;
   const sleep = options.sleep ?? defaultSleep;
   let refreshPromise: Promise<TokenPair> | null = null;
+  let restorePromise: Promise<AuthSessionSnapshot> | null = null;
   let authenticationRevision = 0;
+  let sessionSnapshot: AuthSessionSnapshot = {
+    status: 'restoring',
+    user: null,
+    error: null,
+  };
+  const sessionListeners = new Set<() => void>();
+
+  function publishSession(next: AuthSessionSnapshot) {
+    sessionSnapshot = next;
+
+    sessionListeners.forEach((listener) => {
+      try {
+        listener();
+      } catch {
+        // A UI subscriber must not interrupt credential persistence or cleanup.
+      }
+    });
+  }
+
+  function publishAuthenticated(tokens: TokenPair) {
+    publishSession({ status: 'authenticated', user: tokens.user, error: null });
+  }
 
   async function clearTokens() {
     authenticationRevision += 1;
     await options.tokenStore.clear();
+    publishSession({ status: 'anonymous', user: null, error: null });
   }
 
   async function setTokens(tokens: TokenPair) {
     authenticationRevision += 1;
     await options.tokenStore.set(tokens);
+    publishAuthenticated(tokens);
   }
 
   async function expireAuthentication(cause?: unknown): Promise<never> {
-    await clearTokens();
+    authenticationRevision += 1;
+    await options.tokenStore.clear();
+
+    const expiredError = new ApiError('Your session has expired. Sign in again.', {
+      kind: 'auth-expired',
+      status: 401,
+      cause,
+    });
+    publishSession({ status: 'expired', user: null, error: expiredError });
 
     try {
       await options.onAuthenticationExpired?.();
@@ -102,11 +145,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       // Navigation/cache cleanup must not replace the stable authentication error.
     }
 
-    throw new ApiError('Your session has expired. Sign in again.', {
-      kind: 'auth-expired',
-      status: 401,
-      cause,
-    });
+    throw expiredError;
   }
 
   async function rotateTokens(): Promise<TokenPair> {
@@ -119,6 +158,10 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       const currentTokens = await options.tokenStore.get();
 
       if (!currentTokens?.refreshToken) {
+        return expireAuthentication();
+      }
+
+      if (isExpired(currentTokens.refreshTokenExpiresAt, now())) {
         return expireAuthentication();
       }
 
@@ -158,6 +201,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         }
 
         await options.tokenStore.set(tokens);
+        publishAuthenticated(tokens);
         return tokens;
       } catch (error) {
         if (isApiError(error) && error.kind === 'cancelled') {
@@ -196,7 +240,20 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
           throw createAbortError(requestSignal.timedOut());
         }
 
-        const tokens = authentication === 'none' ? null : await options.tokenStore.get();
+        let tokens = authentication === 'none' ? null : await options.tokenStore.get();
+
+        if (tokens && isExpired(tokens.refreshTokenExpiresAt, now())) {
+          return expireAuthentication();
+        }
+
+        if (
+          tokens &&
+          !refreshed &&
+          isExpired(tokens.accessTokenExpiresAt, now() + refreshLeewayMs)
+        ) {
+          refreshed = true;
+          tokens = await rotateTokens();
+        }
         const headers = new Headers({ Accept: 'application/json' });
 
         for (const [name, value] of Object.entries(requestOptions.headers ?? {})) {
@@ -273,6 +330,83 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     }
   }
 
+  async function restoreSession(signal?: AbortSignal): Promise<AuthSessionSnapshot> {
+    if (restorePromise) {
+      return restorePromise;
+    }
+
+    publishSession({ status: 'restoring', user: null, error: null });
+    restorePromise = (async () => {
+      try {
+        const tokens = await options.tokenStore.get();
+
+        if (!tokens) {
+          const anonymous: AuthSessionSnapshot = {
+            status: 'anonymous',
+            user: null,
+            error: null,
+          };
+          publishSession(anonymous);
+          return anonymous;
+        }
+
+        if (isExpired(tokens.refreshTokenExpiresAt, now())) {
+          return expireAuthentication();
+        }
+
+        if (isExpired(tokens.accessTokenExpiresAt, now() + refreshLeewayMs)) {
+          await rotateTokens();
+        }
+
+        const user = await request<AuthenticatedUser>('/api/v1/auth/me', { signal });
+        const currentTokens = await options.tokenStore.get();
+
+        if (!currentTokens) {
+          return expireAuthentication();
+        }
+
+        const restoredTokens = { ...currentTokens, user };
+        await options.tokenStore.set(restoredTokens);
+        publishAuthenticated(restoredTokens);
+        return sessionSnapshot;
+      } catch (error) {
+        if (isApiError(error) && error.kind === 'auth-expired') {
+          throw error;
+        }
+
+        const apiError = isApiError(error)
+          ? error
+          : new ApiError('Unable to restore your session.', {
+              kind: 'network',
+              retryable: true,
+              cause: error,
+            });
+        publishSession({ status: 'unavailable', user: null, error: apiError });
+        throw apiError;
+      }
+    })().finally(() => {
+      restorePromise = null;
+    });
+
+    return restorePromise;
+  }
+
+  async function logout(signal?: AbortSignal) {
+    try {
+      const tokens = await options.tokenStore.get();
+
+      if (tokens) {
+        await request<void>('/api/v1/auth/sessions/revoke', {
+          method: 'POST',
+          signal,
+          retry: 'never',
+        });
+      }
+    } finally {
+      await clearTokens();
+    }
+  }
+
   const client: ApiClient = {
     request,
     get: (path, requestOptions) =>
@@ -318,21 +452,23 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         return tokens;
       },
       me: (signal) => request('/api/v1/auth/me', { signal }),
-      async revokeSession(signal) {
-        try {
-          await request<void>('/api/v1/auth/sessions/revoke', {
-            method: 'POST',
-            signal,
-            retry: 'never',
-          });
-        } finally {
-          await clearTokens();
-        }
+      getSnapshot: () => sessionSnapshot,
+      subscribe(listener) {
+        sessionListeners.add(listener);
+        return () => sessionListeners.delete(listener);
       },
+      restoreSession,
+      refreshSession: rotateTokens,
+      logout,
+      revokeSession: logout,
     },
   };
 
   return client;
+}
+
+function isExpired(value: string, threshold: number) {
+  return Date.parse(value) <= threshold;
 }
 
 function normalizeBaseUrl(value: string) {
