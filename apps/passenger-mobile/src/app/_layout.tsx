@@ -1,12 +1,13 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router/stack';
 import { StatusBar } from 'expo-status-bar';
 
-import '@/config/environment';
+import { queryClient } from '@/api';
 import { colors } from '@/theme/colors';
 
 export default function RootLayout() {
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
@@ -18,6 +19,6 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" options={{ title: 'RYDO Passenger' }} />
       </Stack>
-    </>
+    </QueryClientProvider>
   );
 }

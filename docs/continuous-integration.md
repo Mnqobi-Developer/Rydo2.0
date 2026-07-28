@@ -12,7 +12,15 @@ and perform:
 2. Expo ESLint validation.
 3. TypeScript compilation without output.
 4. Expo project compatibility checks.
-5. Production dependency auditing at the high severity threshold.
+5. Metro bundling with a non-secret CI API environment.
+6. Production dependency auditing at the high severity threshold.
+
+The shared Mobile API client job independently performs:
+
+1. Deterministic dependency installation with `npm ci`.
+2. Strict TypeScript compilation without output.
+3. Transport, authentication rotation, retry, cancellation, and error tests.
+4. Production dependency auditing at the high severity threshold.
 
 The Admin dashboard job independently performs:
 
