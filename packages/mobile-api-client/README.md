@@ -10,7 +10,7 @@ It provides:
 - single-flight refresh-token rotation;
 - normalized ASP.NET Core problem-detail, network, timeout, and cancellation errors;
 - bounded retries for safe requests only; and
-- a consistently configured TanStack Query client.
+- consistently shared TanStack Query defaults instantiated by each app.
 
 Refresh requests are deliberately never retried. The backend rotates refresh
 tokens and treats replay as a session-compromise signal, so retrying after an

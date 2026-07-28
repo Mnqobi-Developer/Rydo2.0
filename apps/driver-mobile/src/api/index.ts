@@ -1,9 +1,10 @@
 import {
   createApiClient,
-  createMobileQueryClient,
   createSerializedTokenStore,
+  mobileQueryClientOptions,
   type AsyncKeyValueStorage,
 } from '@rydo/mobile-api-client';
+import { QueryClient } from '@tanstack/react-query';
 import { fetch } from 'expo/fetch';
 import * as SecureStore from 'expo-secure-store';
 
@@ -20,7 +21,7 @@ const tokenStore = createSerializedTokenStore(
   'rydo.driver.authentication',
 );
 
-export const queryClient = createMobileQueryClient();
+export const queryClient = new QueryClient(mobileQueryClientOptions);
 
 export const apiClient = createApiClient({
   baseUrl: appConfig.apiBaseUrl,
