@@ -3,6 +3,19 @@
 The Passenger mobile application is an independent Expo project for Android and
 iOS.
 
+## Implemented passenger journey
+
+- OTP sign-in/sign-up with protected routes and secure session restoration
+- Map-first Home tab with location, place search, route preview, cash selection,
+  trip creation, and driver matching
+- Live active-trip status backed by SignalR query refreshes
+- Activity tab backed by passenger trip history
+- Passenger profile creation/editing and backend session logout
+- Saved Places surface ready for the future saved-places API
+
+The Card option remains visibly unavailable until the PayFast dashboard and
+production callback configuration are completed.
+
 ```powershell
 npm install
 npm run start
