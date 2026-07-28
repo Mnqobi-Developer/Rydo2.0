@@ -1,20 +1,26 @@
 import { TouchableOpacity } from '@gorhom/bottom-sheet';
 import {
   decodeGooglePolyline,
+  isApiError,
   type GeoCoordinate,
   type Place,
   type PlacePrediction,
   type RoutePreview,
+  type RequestTripRequest,
+  type Trip,
+  type TripMatchingResult,
 } from '@rydo/mobile-api-client';
 import {
   MapControl,
+  RideCard,
   RydoBottomSheet,
   RydoBottomSheetTextInput,
+  RydoButton,
   colors,
   spacing,
   typography,
 } from '@rydo/mobile-design-system';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Location from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -26,8 +32,15 @@ import { RideMap, type RideMapHandle } from './ride-map';
 
 type Field = 'pickup' | 'destination';
 
-export function RidePlannerScreen() {
+interface RidePlannerScreenProps {
+  greetingName?: string;
+  profileReady: boolean;
+  activeTrip: Trip | null;
+}
+
+export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: RidePlannerScreenProps) {
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const mapRef = useRef<RideMapHandle>(null);
   const [activeField, setActiveField] = useState<Field>('destination');
   const [query, setQuery] = useState('');
@@ -67,6 +80,20 @@ export function RidePlannerScreen() {
   });
   const encodedPolyline = route.data?.encodedPolyline;
   const routeCoordinates = encodedPolyline ? decodeGooglePolyline(encodedPolyline) : [];
+  const requestRide = useMutation({
+    mutationFn: async (request: RequestTripRequest) => {
+      const trip = await apiClient.post<Trip, RequestTripRequest>('/api/v1/trips', request, { retry: 'never' });
+      await apiClient.request<TripMatchingResult>(`/api/v1/trips/${trip.id}/matching`, {
+        method: 'POST',
+        retry: 'never',
+      });
+      return trip;
+    },
+    onSuccess: (trip) => {
+      setMessage('Finding the nearest available driver…');
+      queryClient.setQueryData<Trip[]>(['trips'], (current = []) => [trip, ...current.filter((item) => item.id !== trip.id)]);
+    },
+  });
 
   useEffect(() => {
     if (encodedPolyline) {
@@ -112,6 +139,25 @@ export function RidePlannerScreen() {
     setMessage(field === 'pickup' ? 'Pickup selected.' : 'Destination selected.');
   }
 
+  function submitRideRequest() {
+    if (!pickup || !destination || !profileReady) return;
+    requestRide.reset();
+    requestRide.mutate({
+      pickupAddress: pickup.address,
+      pickupLatitude: pickup.location.latitude,
+      pickupLongitude: pickup.location.longitude,
+      destinationAddress: destination.address,
+      destinationLatitude: destination.location.latitude,
+      destinationLongitude: destination.location.longitude,
+    });
+  }
+
+  const rideError = requestRide.error
+    ? isApiError(requestRide.error)
+      ? requestRide.error.problem?.detail ?? requestRide.error.message
+      : 'Your ride could not be requested.'
+    : undefined;
+
   return (
     <View style={styles.container}>
       <RideMap
@@ -124,8 +170,23 @@ export function RidePlannerScreen() {
       <View style={[styles.locationButton, { top: insets.top + spacing.md }]}>
         <MapControl icon="location" label="Use my current location" onPress={() => void requestCurrentLocation()} />
       </View>
-      <RydoBottomSheet snapPoints={['45%', '75%']} bottomInset={insets.bottom + spacing.md}>
+      {greetingName ? (
+        <View style={[styles.greeting, { top: insets.top + spacing.md }]}>
+          <Text selectable style={styles.greetingText}>Hello, {greetingName}</Text>
+        </View>
+      ) : null}
+      <RydoBottomSheet snapPoints={['48%', '78%']} bottomInset={insets.bottom + 86}>
         <Text selectable style={styles.title}>Plan your ride</Text>
+        {activeTrip ? (
+          <RideCard
+            title={formatTripStatus(activeTrip.status)}
+            pickup={activeTrip.pickupAddress}
+            destination={activeTrip.destinationAddress}
+            metadata={tripStatusMessage(activeTrip.status)}
+            selected
+          />
+        ) : (
+          <>
         <LocationInput
           label="Pickup"
           value={pickup?.address ?? ''}
@@ -158,11 +219,30 @@ export function RidePlannerScreen() {
         ))}
         {route.isFetching ? <Text selectable style={styles.status}>Calculating the fastest route…</Text> : null}
         {route.data ? (
-          <Text selectable style={styles.routeSummary}>
-            {(route.data.distanceMeters / 1000).toFixed(1)} km · {Math.max(1, Math.ceil(route.data.durationSeconds / 60))} min
-          </Text>
+          <View style={{ gap: spacing.md }}>
+            <Text selectable style={styles.routeSummary}>
+              {(route.data.distanceMeters / 1000).toFixed(1)} km · {Math.max(1, Math.ceil(route.data.durationSeconds / 60))} min
+            </Text>
+            <View style={styles.paymentRow}>
+              <View style={styles.paymentSelected}>
+                <Text selectable style={styles.paymentSelectedText}>Cash</Text>
+              </View>
+              <View style={styles.paymentDisabled}>
+                <Text selectable style={styles.paymentDisabledText}>Card · coming soon</Text>
+              </View>
+            </View>
+            {rideError ? <Text selectable style={styles.error}>{rideError}</Text> : null}
+            <RydoButton
+              label={profileReady ? 'Request ride' : 'Complete profile to ride'}
+              loading={requestRide.isPending}
+              disabled={!profileReady}
+              onPress={submitRideRequest}
+            />
+          </View>
         ) : (
           <Text selectable style={styles.status}>{message}</Text>
+        )}
+          </>
         )}
       </RydoBottomSheet>
     </View>
@@ -182,9 +262,27 @@ function createSessionToken() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 }
 
+function formatTripStatus(status: Trip['status']) {
+  return status.replace(/([a-z])([A-Z])/g, '$1 $2');
+}
+
+function tripStatusMessage(status: Trip['status']) {
+  const messages: Record<Trip['status'], string> = {
+    Requested: 'Finding the nearest available driver…',
+    Accepted: 'Your driver is heading to the pickup point.',
+    DriverArrived: 'Your driver has arrived.',
+    InProgress: 'Your ride is in progress.',
+    Completed: 'Ride completed.',
+    Cancelled: 'Ride cancelled.',
+  };
+  return messages[status];
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   locationButton: { position: 'absolute', right: spacing.lg },
+  greeting: { position: 'absolute', left: spacing.md, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, backgroundColor: colors.navyGlass },
+  greetingText: { color: colors.white, fontWeight: '800' },
   title: { color: colors.navy, fontSize: typography.size.title, fontWeight: typography.weight.bold },
   field: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 9 },
   fieldActive: { borderColor: colors.blue, backgroundColor: colors.blueMuted },
@@ -195,4 +293,10 @@ const styles = StyleSheet.create({
   suggestionDetail: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
   status: { color: colors.textMuted, fontSize: 13 },
   routeSummary: { borderRadius: 14, padding: 12, textAlign: 'center', backgroundColor: colors.blue, color: colors.white, fontSize: 16, fontWeight: '800' },
+  paymentRow: { flexDirection: 'row', gap: 8 },
+  paymentSelected: { borderRadius: 999, backgroundColor: colors.navy, paddingHorizontal: 14, paddingVertical: 9 },
+  paymentSelectedText: { color: colors.white, fontWeight: '800' },
+  paymentDisabled: { borderRadius: 999, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 9 },
+  paymentDisabledText: { color: colors.textMuted, fontWeight: '700' },
+  error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
 });

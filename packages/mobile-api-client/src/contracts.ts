@@ -56,3 +56,65 @@ export interface ApiProblemDetails {
   errors?: Record<string, string[]>;
   traceId?: string;
 }
+
+export interface PassengerProfile {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdatePassengerProfileRequest {
+  firstName: string;
+  lastName: string;
+  email: string | null;
+}
+
+export type TripStatus =
+  | 'Requested'
+  | 'Accepted'
+  | 'DriverArrived'
+  | 'InProgress'
+  | 'Completed'
+  | 'Cancelled';
+
+export interface Trip {
+  id: string;
+  passengerUserId: string;
+  driverUserId: string | null;
+  pickupAddress: string;
+  pickupLatitude: number;
+  pickupLongitude: number;
+  destinationAddress: string;
+  destinationLatitude: number;
+  destinationLongitude: number;
+  status: TripStatus;
+  requestedAt: string;
+  updatedAt: string;
+  acceptedAt: string | null;
+  driverArrivedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  cancelledByUserId: string | null;
+  cancellationReason: string | null;
+  finalFareAmount: number | null;
+  version: number;
+}
+
+export interface RequestTripRequest {
+  pickupAddress: string;
+  pickupLatitude: number;
+  pickupLongitude: number;
+  destinationAddress: string;
+  destinationLatitude: number;
+  destinationLongitude: number;
+}
+
+export interface TripMatchingResult {
+  tripId: string;
+  offeredDriverCount: number;
+  offersExpireAt: string | null;
+}

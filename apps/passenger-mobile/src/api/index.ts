@@ -10,7 +10,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { appConfig } from '@/config/environment';
 
-const secureStorage: AsyncKeyValueStorage = {
+const nativeSecureStorage: AsyncKeyValueStorage = {
   getItem: (key) => SecureStore.getItemAsync(key),
   setItem: (key, value) =>
     SecureStore.setItemAsync(key, value, {
@@ -19,8 +19,22 @@ const secureStorage: AsyncKeyValueStorage = {
   removeItem: (key) => SecureStore.deleteItemAsync(key),
 };
 
+const webMemory = new Map<string, string>();
+const webMemoryStorage: AsyncKeyValueStorage = {
+  getItem: async (key) => webMemory.get(key) ?? null,
+  setItem: async (key, value) => {
+    webMemory.set(key, value);
+  },
+  removeItem: async (key) => {
+    webMemory.delete(key);
+  },
+};
+
+const authenticationStorage =
+  process.env.EXPO_OS === 'web' ? webMemoryStorage : nativeSecureStorage;
+
 const tokenStore = createSerializedTokenStore(
-  secureStorage,
+  authenticationStorage,
   'rydo.passenger.authentication',
 );
 

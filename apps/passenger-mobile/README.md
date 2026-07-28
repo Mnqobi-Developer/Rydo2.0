@@ -3,6 +3,19 @@
 The Passenger mobile application is an independent Expo project for Android and
 iOS.
 
+## Implemented passenger journey
+
+- OTP sign-in/sign-up with protected routes and secure session restoration
+- Map-first Home tab with location, place search, route preview, cash selection,
+  trip creation, and driver matching
+- Live active-trip status backed by SignalR query refreshes
+- Activity tab backed by passenger trip history
+- Passenger profile creation/editing and backend session logout
+- Saved Places surface ready for the future saved-places API
+
+The Card option remains visibly unavailable until the PayFast dashboard and
+production callback configuration are completed.
+
 ```powershell
 npm install
 npm run start
@@ -31,6 +44,9 @@ cancelled.
 `AuthSessionProvider` restores the encrypted session at startup and exposes
 automatic token refresh, expired-session state, retryable restoration, and a
 logout action that revokes the backend session before clearing local data.
+Android and iOS persist tokens only through Expo SecureStore. The optional web
+preview uses an in-memory token store, so a browser refresh intentionally signs
+the preview out instead of placing credentials in browser storage.
 
 Only route and layout files belong in `src/app`. Components, features, hooks,
 services, and theme code live in dedicated directories under `src`.
