@@ -109,6 +109,20 @@ public sealed class DriverProfile
         UpdatedAt = reviewedAt;
     }
 
+    public void Reject(string reason, DateTimeOffset reviewedAt)
+    {
+        if (OnboardingStatus != DriverOnboardingStatus.PendingReview)
+        {
+            throw new InvalidOperationException(
+                "Only a driver pending review can be rejected.");
+        }
+
+        RejectionReason = NormalizeReason(reason);
+        OnboardingStatus = DriverOnboardingStatus.Rejected;
+        ReviewedAt = reviewedAt;
+        UpdatedAt = reviewedAt;
+    }
+
     private static string NormalizeName(string value)
     {
         return value.Trim();
@@ -117,5 +131,14 @@ public sealed class DriverProfile
     private static string? NormalizeEmail(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
+    }
+
+    private static string NormalizeReason(string reason)
+    {
+        var normalized = reason.Trim();
+        return normalized.Length is > 0 and <= 500
+            ? normalized
+            : throw new ArgumentException(
+                "Driver rejection reasons must contain between 1 and 500 characters.");
     }
 }

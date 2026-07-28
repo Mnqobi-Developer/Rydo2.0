@@ -82,6 +82,18 @@ Production environments must supply the database connection securely through
 - `GET /api/v1/disputes/me` — list disputes involving the signed-in participant.
 - `GET /api/v1/disputes/{disputeId}` — return an involved participant's dispute and messages.
 - `POST /api/v1/disputes/{disputeId}/messages` — add a message to an open participant dispute.
+- `POST /api/v1/admin/auth/login` — create a session for a configured Admin account.
+- `GET /api/v1/admin/overview` — return operational counts for the Admin dashboard.
+- `GET /api/v1/admin/users` — return paginated Passenger, Driver, and Admin accounts.
+- `GET /api/v1/admin/drivers` — return paginated Driver review packets.
+- `GET /api/v1/admin/drivers/{driverUserId}` — inspect a Driver profile, documents, and vehicle.
+- `POST /api/v1/admin/drivers/{driverUserId}/review` — approve or reject submitted onboarding.
+- `GET /api/v1/admin/drivers/live` — return online Driver locations for the live operations map.
+- `GET /api/v1/admin/trips` — return paginated operational trip records.
+- `GET /api/v1/admin/payments` — return paginated payment records.
+- `GET /api/v1/admin/disputes` — return paginated dispute cases and messages.
+- `POST /api/v1/admin/disputes/{disputeId}/review` — review, resolve, or reject a dispute.
+- `GET /api/v1/admin/audit` — return immutable Admin action records.
 - `/hubs/operations` — SignalR transport endpoint reserved for authorized live
   trip and operations events.
 - `/openapi/v1.json` — OpenAPI document in the Development environment only.
@@ -103,8 +115,20 @@ dotnet tool restore
 dotnet tool run dotnet-ef migrations script --idempotent --configuration Release --project src/Rydo.Infrastructure --startup-project src/Rydo.Api
 ```
 
-Admin operations remain intentionally
-separated for focused follow-up branches.
+## Admin operations
+
+Admin phone self-registration remains disabled. A deployment can bootstrap one
+Admin account from environment secrets by setting `AdminAccess__Enabled=true`
+and supplying `AdminAccess__BootstrapEmail`,
+`AdminAccess__BootstrapPhoneNumber`, and `AdminAccess__BootstrapPassword`. The
+password must contain at least 16 characters. It is PBKDF2-SHA256 hashed before
+database storage and rotated when the configured bootstrap secret changes.
+
+Admin login uses the same JWT and database session controls as the mobile apps,
+with a separate rate limit. Admin-only endpoints provide operational reads,
+Driver verification, dispute resolution, and an immutable mutation audit log.
+Driver reviews atomically update the profile, current documents, vehicle, and
+audit entry. Participant APIs cannot perform these operations.
 
 ## Disputes
 
@@ -112,7 +136,7 @@ A Passenger or assigned Driver can open one dispute for a completed or
 cancelled trip. Opening details are immutable, identical retries are
 idempotent, and both trip participants can view the case and add messages while
 it remains open or under review. Status and resolution fields are persisted for
-the future Admin operations layer; participant endpoints cannot resolve or
+the Admin operations layer; participant endpoints cannot resolve or
 reject their own disputes.
 
 ## Ratings

@@ -9,6 +9,7 @@ using Rydo.Api.Health;
 using Rydo.Api.Hubs;
 using Rydo.Api.Options;
 using Rydo.Infrastructure;
+using Rydo.Infrastructure.Admin;
 using Rydo.Infrastructure.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -105,6 +106,16 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 AutoReplenishment = true,
             }));
+    options.AddPolicy("admin-login", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                QueueLimit = 0,
+                Window = TimeSpan.FromMinutes(1),
+                AutoReplenishment = true,
+            }));
     options.AddPolicy("trip-request", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -148,6 +159,13 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    await scope.ServiceProvider
+        .GetRequiredService<AdminBootstrapService>()
+        .BootstrapAsync(CancellationToken.None);
+}
 
 app.UseExceptionHandler();
 
