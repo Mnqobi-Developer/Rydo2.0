@@ -40,4 +40,6 @@ export const appConfig = Object.freeze({
     process.env.EXPO_PUBLIC_API_BASE_URL,
     environment,
   ),
+  googleMapsWebApiKey:
+    process.env.EXPO_PUBLIC_GOOGLE_MAPS_WEB_API_KEY?.trim() || null,
 });

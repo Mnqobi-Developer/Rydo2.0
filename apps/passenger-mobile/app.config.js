@@ -1,11 +1,5 @@
-import type { ConfigContext, ExpoConfig } from 'expo/config';
-
-type AppVariant = 'development' | 'staging' | 'production';
-
-const variants: Record<
-  AppVariant,
-  { nameSuffix: string; identifierSuffix: string; schemeSuffix: string }
-> = {
+/** @type {Record<'development' | 'staging' | 'production', { nameSuffix: string; identifierSuffix: string; schemeSuffix: string }>} */
+const variants = {
   development: {
     nameSuffix: ' Dev',
     identifierSuffix: '.dev',
@@ -19,20 +13,25 @@ const variants: Record<
   production: { nameSuffix: '', identifierSuffix: '', schemeSuffix: '' },
 };
 
-function resolveVariant(value: string | undefined): AppVariant {
+/**
+ * @param {string | undefined} value
+ * @returns {'development' | 'staging' | 'production'}
+ */
+function resolveVariant(value) {
   const variant = value ?? 'production';
 
   if (!Object.hasOwn(variants, variant)) {
     throw new Error(`Unsupported RYDO Passenger app variant: ${variant}`);
   }
 
-  return variant as AppVariant;
+  return variant;
 }
 
-export default ({ config }: ConfigContext): ExpoConfig => {
+/** @param {import('expo/config').ConfigContext} context */
+module.exports = ({ config }) => {
   const variant = resolveVariant(process.env.APP_VARIANT);
   const settings = variants[variant];
-  const plugins: NonNullable<ExpoConfig['plugins']> = [
+  const plugins = [
     ...(config.plugins ?? []),
     'expo-image',
     [
@@ -56,7 +55,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   return {
     ...config,
     name: `RYDO Passenger${settings.nameSuffix}`,
-    slug: 'rydo-passenger',
+    slug: 'rydo20',
     scheme: `rydo-passenger${settings.schemeSuffix}`,
     ios: {
       ...config.ios,

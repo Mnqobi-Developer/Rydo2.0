@@ -15,7 +15,11 @@ environment create:
    for Android.
 2. iOS SDK keys restricted to **iOS apps** and the exact bundle identifier.
    Enable only Maps SDK for iOS.
-3. A backend server key enabling Places API (New), Routes API, and Geocoding
+3. A browser key restricted to the Passenger web origins. Enable only Maps
+   JavaScript API. Development origins are `http://localhost:8081/*` and
+   `http://localhost:8082/*`; staging and production must use their exact HTTPS
+   origins.
+4. A backend server key enabling Places API (New), Routes API, and Geocoding
    API. Restrict it to the production or staging API's fixed egress IP addresses
    once hosting is selected. Never use this key in an `EXPO_PUBLIC_` variable.
 
@@ -26,10 +30,20 @@ The identifiers that need restrictions are:
 | Passenger | `za.co.rydo.passenger.dev` | `za.co.rydo.passenger.staging` | `za.co.rydo.passenger` |
 | Driver | `za.co.rydo.driver.dev` | `za.co.rydo.driver.staging` | `za.co.rydo.driver` |
 
-Add `GOOGLE_MAPS_ANDROID_API_KEY` and `GOOGLE_MAPS_IOS_API_KEY` to each mobile
-EAS environment. Configure the backend server credential as
-`GoogleMaps__ServerApiKey` in the managed API host. Native SDK keys can be
-extracted from a binary; app and API restrictions are the security boundary.
+Add `GOOGLE_MAPS_ANDROID_API_KEY`, `GOOGLE_MAPS_IOS_API_KEY`, and
+`EXPO_PUBLIC_GOOGLE_MAPS_WEB_API_KEY` to each mobile EAS environment. Configure
+the backend server credential as `GoogleMaps__ServerApiKey` in the managed API
+host. For local development, store it with:
+
+```powershell
+dotnet user-secrets set "GoogleMaps:ServerApiKey" "<server-key>" `
+  --project apps/backend-api/src/Rydo.Api
+```
+
+Native and browser SDK keys can be extracted from a client build; application,
+referrer, and API restrictions are the security boundary. Billing must be
+enabled on the Google Cloud project before any Maps Platform API will serve
+production data.
 
 ## Permission behaviour
 
