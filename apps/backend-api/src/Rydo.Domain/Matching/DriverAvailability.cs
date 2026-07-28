@@ -76,6 +76,18 @@ public sealed class DriverAvailability
         Touch(updatedAt);
     }
 
+    public void UpdateAssignedTripLocation(
+        double latitude,
+        double longitude,
+        DateTimeOffset updatedAt)
+    {
+        ValidateCoordinates(latitude, longitude);
+        Latitude = latitude;
+        Longitude = longitude;
+        LocationUpdatedAt = updatedAt;
+        Touch(updatedAt);
+    }
+
     public void SetOffline(DateTimeOffset updatedAt)
     {
         if (!IsOnline)

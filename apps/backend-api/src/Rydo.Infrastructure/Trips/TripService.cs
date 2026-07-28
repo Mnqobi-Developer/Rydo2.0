@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Rydo.Application.Trips;
+using Rydo.Application.Realtime;
 using Rydo.Domain.Identity;
 using Rydo.Domain.Trips;
 using Rydo.Infrastructure.Persistence;
@@ -8,7 +9,8 @@ namespace Rydo.Infrastructure.Trips;
 
 public sealed class TripService(
     RydoDbContext database,
-    TimeProvider timeProvider) : ITripService
+    TimeProvider timeProvider,
+    IRealtimeEventPublisher realtime) : ITripService
 {
     public async Task<TripResult> RequestAsync(
         Guid passengerUserId,
@@ -69,7 +71,9 @@ public sealed class TripService(
 
         database.Trips.Add(trip);
         await SaveChangesAsync(cancellationToken);
-        return ToResult(trip);
+        var result = ToResult(trip);
+        await realtime.PublishTripUpdatedAsync(result, cancellationToken);
+        return result;
     }
 
     public async Task<TripResult?> GetAsync(
@@ -177,7 +181,9 @@ public sealed class TripService(
             throw new TripStateConflictException(exception.Message);
         }
 
-        return ToResult(trip);
+        var result = ToResult(trip);
+        await realtime.PublishTripUpdatedAsync(result, cancellationToken);
+        return result;
     }
 
     private async Task SaveChangesAsync(CancellationToken cancellationToken)

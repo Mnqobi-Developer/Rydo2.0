@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Rydo.Application.Disputes;
+using Rydo.Application.Realtime;
 using Rydo.Domain.Disputes;
 using Rydo.Domain.Identity;
 using Rydo.Domain.Trips;
@@ -9,7 +10,8 @@ namespace Rydo.Infrastructure.Disputes;
 
 public sealed class DisputeService(
     RydoDbContext database,
-    TimeProvider timeProvider) : IDisputeService
+    TimeProvider timeProvider,
+    IRealtimeEventPublisher realtime) : IDisputeService
 {
     public async Task<(DisputeDetailsResult Dispute, bool Created)> OpenAsync(
         Guid tripId,
@@ -84,7 +86,13 @@ public sealed class DisputeService(
             throw;
         }
 
-        return (ToDetails(candidate, []), true);
+        var result = ToDetails(candidate, []);
+        await realtime.PublishDisputeUpdatedAsync(
+            result,
+            trip.PassengerUserId,
+            trip.DriverUserId,
+            cancellationToken);
+        return (result, true);
     }
 
     public async Task<IReadOnlyList<DisputeSummaryResult>> ListAsync(
@@ -171,7 +179,20 @@ public sealed class DisputeService(
                 "The dispute changed before the message was saved. Refresh and try again.");
         }
 
-        return ToMessageResult(message);
+        var result = ToMessageResult(message);
+        var details = ToDetails(
+            dispute,
+            await GetMessagesAsync(dispute.Id, cancellationToken));
+        var participants = await database.Trips.AsNoTracking()
+            .Where(trip => trip.Id == dispute.TripId)
+            .Select(trip => new { trip.PassengerUserId, trip.DriverUserId })
+            .SingleAsync(cancellationToken);
+        await realtime.PublishDisputeUpdatedAsync(
+            details,
+            participants.PassengerUserId,
+            participants.DriverUserId,
+            cancellationToken);
+        return result;
     }
 
     private IQueryable<Dispute> ParticipantQuery(Guid userId, UserRole role)

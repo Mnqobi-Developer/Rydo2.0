@@ -3,6 +3,7 @@ using Rydo.Application.Admin;
 using Rydo.Application.Disputes;
 using Rydo.Application.Drivers;
 using Rydo.Application.Payments;
+using Rydo.Application.Realtime;
 using Rydo.Application.Trips;
 using Rydo.Domain.Admin;
 using Rydo.Domain.Disputes;
@@ -16,7 +17,8 @@ namespace Rydo.Infrastructure.Admin;
 
 public sealed class AdminOperationsService(
     RydoDbContext database,
-    TimeProvider timeProvider) : IAdminOperationsService
+    TimeProvider timeProvider,
+    IRealtimeEventPublisher realtime) : IAdminOperationsService
 {
     private static readonly DriverDocumentType[] RequiredDocumentTypes =
     [
@@ -299,7 +301,18 @@ public sealed class AdminOperationsService(
             approve ? "decision=Approved" : $"decision=Rejected; reason={reason!.Trim()}",
             now));
         await SaveMutationAsync(cancellationToken);
-        return (await GetDriverAsync(driverUserId, cancellationToken))!;
+        var result = (await GetDriverAsync(driverUserId, cancellationToken))!;
+        await realtime.PublishDriverReviewUpdatedAsync(
+            new DriverReviewChangedResult(
+                driverUserId,
+                result.Profile.OnboardingStatus,
+                result.Profile.RejectionReason,
+                result.Profile.UpdatedAt),
+            cancellationToken);
+        await realtime.PublishAdminOperationsChangedAsync(
+            new AdminOperationsChangedResult("driver", driverUserId, "reviewed", now),
+            cancellationToken);
+        return result;
     }
 
     public async Task<PagedResult<TripResult>> ListTripsAsync(
@@ -452,7 +465,16 @@ public sealed class AdminOperationsService(
             $"status={status}",
             now));
         await SaveMutationAsync(cancellationToken);
-        return await GetAdminDisputeAsync(disputeId, cancellationToken);
+        var result = await GetAdminDisputeAsync(disputeId, cancellationToken);
+        await realtime.PublishDisputeUpdatedAsync(
+            result.Dispute,
+            result.PassengerUserId,
+            result.DriverUserId,
+            cancellationToken);
+        await realtime.PublishAdminOperationsChangedAsync(
+            new AdminOperationsChangedResult("dispute", disputeId, "reviewed", now),
+            cancellationToken);
+        return result;
     }
 
     public async Task<PagedResult<AdminAuditResult>> ListAuditAsync(
