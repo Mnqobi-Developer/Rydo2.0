@@ -14,6 +14,19 @@ export interface TokenPair {
   user: AuthenticatedUser;
 }
 
+export type AuthSessionStatus =
+  | 'restoring'
+  | 'authenticated'
+  | 'anonymous'
+  | 'expired'
+  | 'unavailable';
+
+export interface AuthSessionSnapshot {
+  status: AuthSessionStatus;
+  user: AuthenticatedUser | null;
+  error: import('./errors').ApiError | null;
+}
+
 export interface RequestOtpRequest {
   phoneNumber: string;
   role: Extract<UserRole, 'Passenger' | 'Driver'>;

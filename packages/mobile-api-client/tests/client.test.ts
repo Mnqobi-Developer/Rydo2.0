@@ -67,6 +67,99 @@ describe('API client', () => {
     expect(onAuthenticationExpired).toHaveBeenCalledOnce();
   });
 
+  it('refreshes proactively before attaching an access token near expiry', async () => {
+    const expiringTokens = tokenPair('expiring-access', 'valid-refresh', {
+      accessTokenExpiresAt: '2026-07-28T12:00:30Z',
+    });
+    const tokenStore = memoryTokenStore(expiringTokens);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/api/v1/auth/refresh')) {
+        return jsonResponse(newTokens);
+      }
+
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer new-access');
+      return jsonResponse({ ready: true });
+    });
+    const client = createClient(fetchMock, tokenStore, {
+      now: () => Date.parse('2026-07-28T12:00:00Z'),
+    });
+
+    await expect(client.get('/protected')).resolves.toEqual({ ready: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(await tokenStore.get()).toEqual(newTokens);
+  });
+
+  it('expires locally without a network request when the refresh token is expired', async () => {
+    const expiredTokens = tokenPair('expired-access', 'expired-refresh', {
+      accessTokenExpiresAt: '2026-07-28T11:00:00Z',
+      refreshTokenExpiresAt: '2026-07-28T11:30:00Z',
+    });
+    const tokenStore = memoryTokenStore(expiredTokens);
+    const fetchMock = vi.fn(async () => jsonResponse({}));
+    const client = createClient(fetchMock, tokenStore, {
+      now: () => Date.parse('2026-07-28T12:00:00Z'),
+    });
+
+    await expect(client.get('/protected')).rejects.toMatchObject({
+      kind: 'auth-expired',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await tokenStore.get()).toBeNull();
+    expect(client.auth.getSnapshot()).toMatchObject({ status: 'expired', user: null });
+  });
+
+  it('restores a persisted session and publishes the current backend user', async () => {
+    const tokenStore = memoryTokenStore(oldTokens);
+    const backendUser = { ...oldTokens.user, phoneNumber: '+27821111111' };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe('https://api.rydo.test/api/v1/auth/me');
+      return jsonResponse(backendUser);
+    });
+    const client = createClient(fetchMock, tokenStore);
+    const listener = vi.fn();
+    const unsubscribe = client.auth.subscribe(listener);
+
+    await expect(client.auth.restoreSession()).resolves.toMatchObject({
+      status: 'authenticated',
+      user: backendUser,
+    });
+    expect((await tokenStore.get())?.user).toEqual(backendUser);
+    expect(listener).toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it('restores an empty secure store as an anonymous session', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({}));
+    const client = createClient(fetchMock, memoryTokenStore());
+
+    await expect(client.auth.restoreSession()).resolves.toEqual({
+      status: 'anonymous',
+      user: null,
+      error: null,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('revokes on logout and clears local credentials even when revocation fails', async () => {
+    const tokenStore = memoryTokenStore(oldTokens);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe(
+        'https://api.rydo.test/api/v1/auth/sessions/revoke',
+      );
+      return jsonResponse({ title: 'Unavailable' }, 503);
+    });
+    const client = createClient(fetchMock, tokenStore);
+
+    await expect(client.auth.logout()).rejects.toMatchObject({ status: 503 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(await tokenStore.get()).toBeNull();
+    expect(client.auth.getSnapshot()).toEqual({
+      status: 'anonymous',
+      user: null,
+      error: null,
+    });
+  });
+
   it('retries safe requests with bounded backoff', async () => {
     const fetchMock = vi
       .fn()
@@ -202,6 +295,7 @@ function createClient(
     tokenStore,
     fetch: fetchMock as typeof fetch,
     sleep: async () => undefined,
+    now: () => Date.parse('2026-07-28T12:00:00Z'),
     ...overrides,
   });
 }
@@ -220,7 +314,13 @@ function memoryTokenStore(initial: TokenPair | null = null): TokenStore {
   };
 }
 
-function tokenPair(accessToken: string, refreshToken: string): TokenPair {
+function tokenPair(
+  accessToken: string,
+  refreshToken: string,
+  expirations: Partial<
+    Pick<TokenPair, 'accessTokenExpiresAt' | 'refreshTokenExpiresAt'>
+  > = {},
+): TokenPair {
   return {
     accessToken,
     accessTokenExpiresAt: '2026-07-28T13:00:00Z',
@@ -231,6 +331,7 @@ function tokenPair(accessToken: string, refreshToken: string): TokenPair {
       phoneNumber: '+27820000000',
       role: 'Passenger',
     },
+    ...expirations,
   };
 }
 
