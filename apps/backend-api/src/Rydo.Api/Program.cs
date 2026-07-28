@@ -8,6 +8,7 @@ using Rydo.Api.Authentication;
 using Rydo.Api.Health;
 using Rydo.Api.Hubs;
 using Rydo.Api.Options;
+using Rydo.Application.Realtime;
 using Rydo.Infrastructure;
 using Rydo.Infrastructure.Admin;
 using Rydo.Infrastructure.Authentication;
@@ -29,6 +30,7 @@ builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<IRealtimeEventPublisher, SignalRRealtimeEventPublisher>();
 builder.Services
     .AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
@@ -188,7 +190,9 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     Predicate = registration => registration.Tags.Contains("ready"),
 });
 app.MapControllers();
-app.MapHub<OperationsHub>(HubRoutes.Operations).RequireRateLimiting("api");
+app.MapHub<OperationsHub>(HubRoutes.Operations)
+    .RequireAuthorization()
+    .RequireRateLimiting("api");
 
 app.Run();
 

@@ -94,9 +94,32 @@ Production environments must supply the database connection securely through
 - `GET /api/v1/admin/disputes` — return paginated dispute cases and messages.
 - `POST /api/v1/admin/disputes/{disputeId}/review` — review, resolve, or reject a dispute.
 - `GET /api/v1/admin/audit` — return immutable Admin action records.
-- `/hubs/operations` — SignalR transport endpoint reserved for authorized live
-  trip and operations events.
+- `/hubs/operations` — authenticated SignalR endpoint for live trip and
+  operations events. JWT bearer tokens may be supplied through the normal
+  authorization header or the SignalR `access_token` query parameter during
+  WebSocket and server-sent-event connection setup.
 - `/openapi/v1.json` — OpenAPI document in the Development environment only.
+
+## Real-time events
+
+The operations hub assigns each authenticated connection to its own user group
+and role group. Clients cannot join arbitrary groups or publish events. The API
+publishes these stable client method names:
+
+- `TripUpdated`
+- `TripOfferUpdated`
+- `DriverAvailabilityUpdated`
+- `PaymentUpdated`
+- `DisputeUpdated`
+- `DriverReviewUpdated`
+- `AdminOperationsChanged`
+
+Passenger and Driver clients receive only events for trips and records they are
+involved in; Admin clients receive operational events through the Admin role
+group. Delivery is best-effort after the database transaction commits, so REST
+responses remain authoritative and reconnecting clients must refresh current
+state. Multi-instance production deployments will require a shared SignalR
+backplane such as Redis.
 
 ## Quality checks
 

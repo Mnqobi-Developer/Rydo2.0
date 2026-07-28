@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Rydo.Application.Payments;
+using Rydo.Application.Realtime;
 using Rydo.Domain.Identity;
 using Rydo.Domain.Payments;
 using Rydo.Domain.Trips;
@@ -14,7 +15,8 @@ namespace Rydo.Infrastructure.Payments;
 public sealed class PaymentService(
     RydoDbContext database,
     IPayFastGateway payFast,
-    TimeProvider timeProvider) : IPaymentService
+    TimeProvider timeProvider,
+    IRealtimeEventPublisher realtime) : IPaymentService
 {
     public async Task<CreatePaymentResult> CreateAsync(
         Guid tripId,
@@ -62,6 +64,8 @@ public sealed class PaymentService(
             throw new PaymentProviderUnavailableException();
         }
 
+        var created = false;
+
         if (payment is null)
         {
             payment = Payment.Create(
@@ -72,6 +76,7 @@ public sealed class PaymentService(
                 timeProvider.GetUtcNow());
             database.Payments.Add(payment);
             await SaveChangesAsync(cancellationToken);
+            created = true;
         }
 
         PayFastCheckout? checkout = null;
@@ -93,7 +98,17 @@ public sealed class PaymentService(
                 phoneNumber);
         }
 
-        return new CreatePaymentResult(ToResult(payment), checkout);
+        var result = ToResult(payment);
+
+        if (created)
+        {
+            await realtime.PublishPaymentUpdatedAsync(
+                result,
+                trip.DriverUserId,
+                cancellationToken);
+        }
+
+        return new CreatePaymentResult(result, checkout);
     }
 
     public async Task<PaymentResult?> GetForTripAsync(
@@ -145,7 +160,9 @@ public sealed class PaymentService(
         }
 
         await SaveChangesAsync(cancellationToken);
-        return ToResult(payment);
+        var result = ToResult(payment);
+        await realtime.PublishPaymentUpdatedAsync(result, driverUserId, cancellationToken);
+        return result;
     }
 
     public async Task ProcessPayFastNotificationAsync(
@@ -206,6 +223,18 @@ public sealed class PaymentService(
             remoteIpAddress?.ToString(),
             now));
         await SaveChangesAsync(cancellationToken);
+
+        if (validation.IsValid && payment is not null)
+        {
+            var driverUserId = await database.Trips
+                .Where(trip => trip.Id == payment.TripId)
+                .Select(trip => trip.DriverUserId)
+                .SingleAsync(cancellationToken);
+            await realtime.PublishPaymentUpdatedAsync(
+                ToResult(payment),
+                driverUserId,
+                cancellationToken);
+        }
     }
 
     private async Task<PayFastValidationResult> ValidateNotificationAsync(

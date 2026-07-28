@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Rydo.Application.Matching;
+using Rydo.Application.Realtime;
 using Rydo.Application.Trips;
 using Rydo.Domain.Drivers;
 using Rydo.Domain.Matching;
@@ -10,7 +11,8 @@ namespace Rydo.Infrastructure.Matching;
 
 public sealed class DriverMatchingService(
     RydoDbContext database,
-    TimeProvider timeProvider) : IDriverMatchingService
+    TimeProvider timeProvider,
+    IRealtimeEventPublisher realtime) : IDriverMatchingService
 {
     private const int MaximumOffersPerWave = 5;
     private const double MaximumPickupDistanceKilometres = 20;
@@ -67,7 +69,12 @@ public sealed class DriverMatchingService(
         }
 
         await SaveChangesAsync(cancellationToken);
-        return ToAvailabilityResult(availability);
+        var result = ToAvailabilityResult(availability);
+        await realtime.PublishDriverAvailabilityUpdatedAsync(
+            result,
+            null,
+            cancellationToken);
+        return result;
     }
 
     public async Task<DriverAvailabilityResult?> GoOfflineAsync(
@@ -91,7 +98,12 @@ public sealed class DriverMatchingService(
 
         availability.SetOffline(timeProvider.GetUtcNow());
         await SaveChangesAsync(cancellationToken);
-        return ToAvailabilityResult(availability);
+        var result = ToAvailabilityResult(availability);
+        await realtime.PublishDriverAvailabilityUpdatedAsync(
+            result,
+            null,
+            cancellationToken);
+        return result;
     }
 
     public async Task<DriverAvailabilityResult> UpdateLocationAsync(
@@ -103,13 +115,30 @@ public sealed class DriverMatchingService(
         var availability = await database.DriverAvailability.SingleOrDefaultAsync(
             item => item.DriverUserId == driverUserId,
             cancellationToken) ?? throw new DriverAvailabilityNotFoundException();
+        var activePassengerUserId = await database.Trips
+            .Where(trip => trip.DriverUserId == driverUserId &&
+                trip.Status != TripStatus.Completed &&
+                trip.Status != TripStatus.Cancelled)
+            .Select(trip => (Guid?)trip.PassengerUserId)
+            .SingleOrDefaultAsync(cancellationToken);
 
         try
         {
-            availability.UpdateLocation(
-                latitude,
-                longitude,
-                timeProvider.GetUtcNow());
+            var now = timeProvider.GetUtcNow();
+
+            if (availability.IsOnline)
+            {
+                availability.UpdateLocation(latitude, longitude, now);
+            }
+            else if (activePassengerUserId is not null)
+            {
+                availability.UpdateAssignedTripLocation(latitude, longitude, now);
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    "A driver must be online or assigned to an active trip before updating location.");
+            }
         }
         catch (Exception exception) when (
             exception is ArgumentException or InvalidOperationException)
@@ -118,7 +147,12 @@ public sealed class DriverMatchingService(
         }
 
         await SaveChangesAsync(cancellationToken);
-        return ToAvailabilityResult(availability);
+        var result = ToAvailabilityResult(availability);
+        await realtime.PublishDriverAvailabilityUpdatedAsync(
+            result,
+            activePassengerUserId,
+            cancellationToken);
+        return result;
     }
 
     public async Task<TripMatchingResult> MatchAsync(
@@ -204,17 +238,31 @@ public sealed class DriverMatchingService(
             .ToList();
         var expiresAt = now + OfferLifetime;
 
+        var createdOffers = new List<TripOffer>(candidates.Count);
+
         foreach (var candidate in candidates)
         {
-            database.TripOffers.Add(TripOffer.Create(
+            var createdOffer = TripOffer.Create(
                 tripId,
                 candidate.Driver.DriverUserId,
                 candidate.Distance,
                 now,
-                expiresAt));
+                expiresAt);
+            createdOffers.Add(createdOffer);
+            database.TripOffers.Add(createdOffer);
         }
 
         await SaveChangesAsync(cancellationToken);
+        var createdOfferIds = createdOffers.Select(offer => offer.Id).ToArray();
+        var offerResults = await ProjectOffers(database.TripOffers.Where(
+                offer => createdOfferIds.Contains(offer.Id)))
+            .ToListAsync(cancellationToken);
+
+        foreach (var offerResult in offerResults)
+        {
+            await realtime.PublishTripOfferUpdatedAsync(offerResult, cancellationToken);
+        }
+
         return new TripMatchingResult(
             tripId,
             candidates.Count,
@@ -272,8 +320,10 @@ public sealed class DriverMatchingService(
         }
 
         await SaveChangesAsync(cancellationToken);
-        return await ProjectOffers(database.TripOffers.Where(item => item.Id == offer.Id))
+        var result = await ProjectOffers(database.TripOffers.Where(item => item.Id == offer.Id))
             .SingleAsync(cancellationToken);
+        await realtime.PublishTripOfferUpdatedAsync(result, cancellationToken);
+        return result;
     }
 
     public async Task<TripResult> AcceptOfferAsync(
@@ -335,7 +385,25 @@ public sealed class DriverMatchingService(
 
         availability.SetOffline(now);
         await SaveChangesAsync(cancellationToken);
-        return ToTripResult(trip);
+        var changedOfferIds = competingOffers.Select(item => item.Id)
+            .Append(offer.Id)
+            .ToArray();
+        var changedOffers = await ProjectOffers(database.TripOffers.Where(
+                item => changedOfferIds.Contains(item.Id)))
+            .ToListAsync(cancellationToken);
+
+        foreach (var changedOffer in changedOffers)
+        {
+            await realtime.PublishTripOfferUpdatedAsync(changedOffer, cancellationToken);
+        }
+
+        var tripResult = ToTripResult(trip);
+        await realtime.PublishTripUpdatedAsync(tripResult, cancellationToken);
+        await realtime.PublishDriverAvailabilityUpdatedAsync(
+            ToAvailabilityResult(availability),
+            trip.PassengerUserId,
+            cancellationToken);
+        return tripResult;
     }
 
     private async Task RequireEligibleDriverAsync(

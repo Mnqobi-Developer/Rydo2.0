@@ -8,6 +8,19 @@ public sealed class SessionValidationEvents(
     RydoDbContext database,
     TimeProvider timeProvider) : JwtBearerEvents
 {
+    public override Task MessageReceived(MessageReceivedContext context)
+    {
+        var accessToken = context.Request.Query["access_token"];
+
+        if (!string.IsNullOrEmpty(accessToken) &&
+            context.HttpContext.Request.Path.StartsWithSegments("/hubs/operations"))
+        {
+            context.Token = accessToken;
+        }
+
+        return Task.CompletedTask;
+    }
+
     public override async Task TokenValidated(TokenValidatedContext context)
     {
         var subject = context.Principal?.FindFirst("sub")?.Value;
