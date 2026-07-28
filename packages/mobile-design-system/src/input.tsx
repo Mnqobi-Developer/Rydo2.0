@@ -1,7 +1,7 @@
-import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { forwardRef, type ComponentProps } from 'react';
 import { Text, TextInput, View } from 'react-native';
 
+import { BottomSheetCompatibleTextInput } from './bottom-sheet-text-input';
 import { colors, radii, spacing, typography } from './tokens';
 
 export interface RydoTextInputProps extends ComponentProps<typeof TextInput> {
@@ -72,7 +72,7 @@ export function RydoBottomSheetTextInput({
           {label}
         </Text>
       ) : null}
-      <BottomSheetTextInput
+      <BottomSheetCompatibleTextInput
         editable={editable}
         placeholderTextColor={colors.textMuted}
         selectionColor={colors.blue}
