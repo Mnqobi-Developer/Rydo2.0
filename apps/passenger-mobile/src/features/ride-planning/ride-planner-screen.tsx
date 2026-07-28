@@ -22,8 +22,8 @@ import {
 } from '@rydo/mobile-design-system';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Location from 'expo-location';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { apiClient } from '@/api';
@@ -31,6 +31,7 @@ import { apiClient } from '@/api';
 import { RideMap, type RideMapHandle } from './ride-map';
 
 type Field = 'pickup' | 'destination';
+type LocationStatus = 'locating' | 'ready' | 'denied' | 'error';
 
 interface RidePlannerScreenProps {
   greetingName?: string;
@@ -47,8 +48,13 @@ export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: Ri
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [pickup, setPickup] = useState<Place | null>(null);
   const [destination, setDestination] = useState<Place | null>(null);
-  const [message, setMessage] = useState('Search or choose a point on the map.');
+  const [currentLocation, setCurrentLocation] = useState<GeoCoordinate | null>(null);
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>('locating');
+  const [message, setMessage] = useState('Finding your current location…');
   const sessionTokenRef = useRef(createSessionToken());
+  const coordinateLookupRef = useRef<Record<Field, number>>({ pickup: 0, destination: 0 });
+  const locationRequestRef = useRef<Promise<void> | null>(null);
+  const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
     const timeout = setTimeout(() => setDebouncedQuery(query.trim()), 350);
@@ -56,16 +62,17 @@ export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: Ri
   }, [query]);
 
   const autocomplete = useQuery({
-    queryKey: ['maps', 'autocomplete', debouncedQuery, pickup?.location],
+    queryKey: ['maps', 'autocomplete', debouncedQuery, pickup?.location, currentLocation],
     enabled: debouncedQuery.length >= 3,
     queryFn: ({ signal }) => {
       const params = new URLSearchParams({
         query: debouncedQuery,
         sessionToken: sessionTokenRef.current,
       });
-      if (pickup) {
-        params.set('latitude', String(pickup.location.latitude));
-        params.set('longitude', String(pickup.location.longitude));
+      const locationBias = pickup?.location ?? currentLocation;
+      if (locationBias) {
+        params.set('latitude', String(locationBias.latitude));
+        params.set('longitude', String(locationBias.longitude));
       }
       return apiClient.get<PlacePrediction[]>(`/api/v1/maps/places/autocomplete?${params}`, { signal });
     },
@@ -104,29 +111,94 @@ export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: Ri
     }
   }, [encodedPolyline]);
 
-  async function requestCurrentLocation() {
-    const permission = await Location.requestForegroundPermissionsAsync();
-    if (!permission.granted) {
-      setMessage('Location permission is needed to use your position as pickup.');
-      return;
+  const selectPlace = useCallback((place: Place, field: Field) => {
+    if (field === 'pickup') {
+      setPickup(place);
+      setActiveField('destination');
+    } else {
+      setDestination(place);
     }
+    setQuery('');
+    setMessage(
+      field === 'pickup'
+        ? 'Pickup selected. Now choose your destination.'
+        : 'Destination selected. Calculating your route…',
+    );
+  }, []);
 
-    const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    await selectCoordinate({ latitude: current.coords.latitude, longitude: current.coords.longitude }, 'pickup');
-  }
-
-  async function selectCoordinate(location: GeoCoordinate, field = activeField) {
-    setMessage('Looking up this address…');
+  const selectCoordinate = useCallback(async (location: GeoCoordinate, field: Field) => {
+    const lookupId = ++coordinateLookupRef.current[field];
+    setMessage(`Looking up the ${field} address…`);
     try {
       const place = await apiClient.get<Place>(
         `/api/v1/maps/geocode/reverse?latitude=${location.latitude}&longitude=${location.longitude}`,
       );
+      if (lookupId !== coordinateLookupRef.current[field]) return;
       selectPlace(place, field);
     } catch (error) {
+      if (lookupId !== coordinateLookupRef.current[field]) return;
       selectPlace({ placeId: '', name: 'Pinned location', address: 'Pinned location', location }, field);
       setMessage(mapErrorMessage(error, 'Location pinned, but its address could not be resolved.'));
     }
-  }
+  }, [selectPlace]);
+
+  const requestCurrentLocation = useCallback((requestPermission: boolean, useAsPickup: boolean) => {
+    if (locationRequestRef.current) return locationRequestRef.current;
+
+    const request = (async () => {
+      setLocationStatus('locating');
+      setMessage('Finding your current location…');
+
+      try {
+        let permission = await Location.getForegroundPermissionsAsync();
+        if (!permission.granted && requestPermission && permission.canAskAgain) {
+          permission = await Location.requestForegroundPermissionsAsync();
+        }
+
+        if (!permission.granted) {
+          setLocationStatus('denied');
+          setMessage('Enable location permission to use your position, or tap the map to choose a pickup.');
+          return;
+        }
+
+        const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        const coordinate = {
+          latitude: current.coords.latitude,
+          longitude: current.coords.longitude,
+        };
+        setCurrentLocation(coordinate);
+        setLocationStatus('ready');
+        mapRef.current?.focusCoordinate(coordinate);
+        if (useAsPickup) {
+          await selectCoordinate(coordinate, 'pickup');
+        } else {
+          setMessage('Current location updated.');
+        }
+      } catch {
+        setLocationStatus('error');
+        setMessage('Your current location could not be determined. Check location services or choose a pickup on the map.');
+      }
+    })().finally(() => {
+      locationRequestRef.current = null;
+    });
+
+    locationRequestRef.current = request;
+    return request;
+  }, [selectCoordinate]);
+
+  useEffect(() => {
+    void requestCurrentLocation(true, true);
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const returningToForeground = appStateRef.current !== 'active' && nextState === 'active';
+      appStateRef.current = nextState;
+      if (returningToForeground) {
+        void requestCurrentLocation(false, false);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [requestCurrentLocation]);
 
   async function selectPrediction(prediction: PlacePrediction) {
     setMessage('Loading this place…');
@@ -139,13 +211,6 @@ export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: Ri
     } catch (error) {
       setMessage(mapErrorMessage(error, 'This place could not be loaded.'));
     }
-  }
-
-  function selectPlace(place: Place, field: Field) {
-    if (field === 'pickup') setPickup(place);
-    else setDestination(place);
-    setQuery('');
-    setMessage(field === 'pickup' ? 'Pickup selected.' : 'Destination selected.');
   }
 
   function submitRideRequest() {
@@ -161,6 +226,12 @@ export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: Ri
     });
   }
 
+  function activateField(field: Field) {
+    setActiveField(field);
+    setQuery('');
+    setMessage(`Search or tap the map to choose your ${field}.`);
+  }
+
   const rideError = requestRide.error
     ? isApiError(requestRide.error)
       ? requestRide.error.problem?.detail ?? requestRide.error.message
@@ -171,13 +242,26 @@ export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: Ri
     <View style={styles.container}>
       <RideMap
         ref={mapRef}
+        currentLocation={currentLocation}
         pickup={pickup?.location ?? null}
         destination={destination?.location ?? null}
         route={routeCoordinates}
-        onMapPress={(coordinate: GeoCoordinate) => void selectCoordinate(coordinate)}
+        onMapPress={(coordinate: GeoCoordinate) => void selectCoordinate(coordinate, activeField)}
       />
+      {locationStatus === 'locating' ? (
+        <View pointerEvents="none" style={styles.locatingOverlay}>
+          <ActivityIndicator color={colors.blue} size="large" />
+          <Text selectable style={styles.locatingText}>Finding your current location…</Text>
+        </View>
+      ) : null}
       <View style={[styles.locationButton, { top: insets.top + spacing.md }]}>
-        <MapControl icon="location" label="Use my current location" onPress={() => void requestCurrentLocation()} />
+        <MapControl
+          icon="location"
+          label="Use my current location"
+          selected={locationStatus === 'ready'}
+          disabled={locationStatus === 'locating'}
+          onPress={() => void requestCurrentLocation(true, true)}
+        />
       </View>
       {greetingName ? (
         <View style={[styles.greeting, { top: insets.top + spacing.md }]}>
@@ -200,13 +284,13 @@ export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: Ri
           label="Pickup"
           value={pickup?.address ?? ''}
           active={activeField === 'pickup'}
-          onPress={() => setActiveField('pickup')}
+          onPress={() => activateField('pickup')}
         />
         <LocationInput
           label="Destination"
           value={destination?.address ?? ''}
           active={activeField === 'destination'}
-          onPress={() => setActiveField('destination')}
+          onPress={() => activateField('destination')}
         />
         <RydoBottomSheetTextInput
           value={query}
@@ -309,6 +393,18 @@ function tripStatusMessage(status: Trip['status']) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  locatingOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    backgroundColor: '#DDE8E3',
+  },
+  locatingText: { color: colors.navy, fontSize: 15, fontWeight: '700' },
   locationButton: { position: 'absolute', right: spacing.lg },
   greeting: { position: 'absolute', left: spacing.md, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, backgroundColor: colors.navyGlass },
   greetingText: { color: colors.white, fontWeight: '800' },

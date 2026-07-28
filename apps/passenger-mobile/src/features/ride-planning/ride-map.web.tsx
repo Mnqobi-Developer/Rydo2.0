@@ -10,9 +10,11 @@ import { colors } from '@/theme/colors';
 
 export interface RideMapHandle {
   fitRoute(coordinates: GeoCoordinate[]): void;
+  focusCoordinate(coordinate: GeoCoordinate): void;
 }
 
 interface RideMapProps {
+  currentLocation: GeoCoordinate | null;
   pickup: GeoCoordinate | null;
   destination: GeoCoordinate | null;
   route: GeoCoordinate[];
@@ -42,7 +44,7 @@ function loadGoogleMaps(apiKey: string) {
 }
 
 export const RideMap = forwardRef<RideMapHandle, RideMapProps>(function RideMap(
-  { pickup, destination, route, onMapPress },
+  { currentLocation, pickup, destination, route, onMapPress },
   forwardedRef,
 ) {
   const containerRef = useRef<View>(null);
@@ -68,6 +70,15 @@ export const RideMap = forwardRef<RideMapHandle, RideMapProps>(function RideMap(
       const bounds = new core.LatLngBounds();
       coordinates.forEach((coordinate) => bounds.extend(toLatLngLiteral(coordinate)));
       map.fitBounds(bounds, { top: 100, right: 50, bottom: 330, left: 50 });
+    },
+    focusCoordinate(coordinate) {
+      const map = mapRef.current;
+      if (!map) return;
+
+      map.panTo(toLatLngLiteral(coordinate));
+      if ((map.getZoom() ?? 0) < 16) {
+        map.setZoom(16);
+      }
     },
   }));
 
@@ -121,6 +132,14 @@ export const RideMap = forwardRef<RideMapHandle, RideMapProps>(function RideMap(
       mapRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map || !currentLocation) return;
+
+    map.panTo(toLatLngLiteral(currentLocation));
+    map.setZoom(16);
+  }, [currentLocation, ready]);
 
   useEffect(() => {
     const map = mapRef.current;

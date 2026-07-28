@@ -1,12 +1,14 @@
 import type { GeoCoordinate } from '@rydo/mobile-api-client';
-import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
 export interface RideMapHandle {
   fitRoute(coordinates: GeoCoordinate[]): void;
+  focusCoordinate(coordinate: GeoCoordinate): void;
 }
 
 interface RideMapProps {
+  currentLocation: GeoCoordinate | null;
   pickup: GeoCoordinate | null;
   destination: GeoCoordinate | null;
   route: GeoCoordinate[];
@@ -14,7 +16,7 @@ interface RideMapProps {
 }
 
 export const RideMap = forwardRef<RideMapHandle, RideMapProps>(function RideMap(
-  { pickup, destination, route, onMapPress },
+  { currentLocation, pickup, destination, route, onMapPress },
   forwardedRef,
 ) {
   const mapRef = useRef<MapView>(null);
@@ -28,7 +30,30 @@ export const RideMap = forwardRef<RideMapHandle, RideMapProps>(function RideMap(
         });
       }
     },
+    focusCoordinate(coordinate) {
+      mapRef.current?.animateToRegion(
+        {
+          ...coordinate,
+          latitudeDelta: 0.012,
+          longitudeDelta: 0.012,
+        },
+        500,
+      );
+    },
   }));
+
+  useEffect(() => {
+    if (!currentLocation) return;
+
+    mapRef.current?.animateToRegion(
+      {
+        ...currentLocation,
+        latitudeDelta: 0.012,
+        longitudeDelta: 0.012,
+      },
+      500,
+    );
+  }, [currentLocation]);
 
   return (
     <MapView
@@ -41,7 +66,7 @@ export const RideMap = forwardRef<RideMapHandle, RideMapProps>(function RideMap(
         latitudeDelta: 0.16,
         longitudeDelta: 0.16,
       }}
-      onLongPress={(event) => onMapPress(event.nativeEvent.coordinate)}
+      onPress={(event) => onMapPress(event.nativeEvent.coordinate)}
       showsUserLocation
       showsMyLocationButton={false}
     >
