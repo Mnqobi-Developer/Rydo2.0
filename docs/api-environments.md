@@ -79,17 +79,18 @@ production builds.
 
 ## Mobile build environments
 
-Both Expo apps contain `development`, `staging`, and `production` EAS build
-profiles. EAS provides environment sets named `development`, `preview`, and
-`production`, so the RYDO `staging` profile intentionally reads EAS's `preview`
-set.
+Both Expo apps contain `development`, `development-simulator`, `staging`, and
+`production` EAS build profiles. EAS provides environment sets named
+`development`, `preview`, and `production`, so the RYDO `staging` profile
+intentionally reads EAS's `preview` set. Development builds include
+`expo-dev-client`; see [Mobile development builds](mobile-development-builds.md).
 
 After each app is linked to its own EAS project with `npx eas-cli@latest init`,
 set the public API URL from that app directory:
 
 ```powershell
-npx eas-cli@latest env:set --name EXPO_PUBLIC_API_BASE_URL --value https://api-staging.rydo.co.za --environment preview --visibility plaintext
-npx eas-cli@latest env:set --name EXPO_PUBLIC_API_BASE_URL --value https://api.rydo.co.za --environment production --visibility plaintext
+npx eas-cli@latest env:create --name EXPO_PUBLIC_API_BASE_URL --value https://api-staging.rydo.co.za --environment preview --visibility plaintext
+npx eas-cli@latest env:create --name EXPO_PUBLIC_API_BASE_URL --value https://api.rydo.co.za --environment production --visibility plaintext
 ```
 
 Create internal staging and store-ready production builds with:
