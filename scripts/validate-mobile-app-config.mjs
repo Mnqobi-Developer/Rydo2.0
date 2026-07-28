@@ -62,6 +62,9 @@ for (const [variant, settings] of Object.entries(variants)) {
   const devClientPlugin = config.plugins?.find(
     (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-dev-client',
   );
+  const imagePlugin = config.plugins?.find(
+    (plugin) => plugin === 'expo-image' || (Array.isArray(plugin) && plugin[0] === 'expo-image'),
+  );
 
   assertEqual(`${variant} name`, config.name, expectedName);
   assertEqual(`${variant} Android package`, config.android?.package, expectedIdentifier);
@@ -70,6 +73,8 @@ for (const [variant, settings] of Object.entries(variants)) {
   assertEqual(`${variant} manifest marker`, config.extra?.appVariant, variant);
   assertEqual(`${variant} Android Maps key`, config.android?.config?.googleMaps?.apiKey, 'test-android-maps-key');
   assertEqual(`${variant} iOS Maps key`, config.ios?.config?.googleMapsApiKey, 'test-ios-maps-key');
+  assertEqual(`${variant} Android keyboard mode`, config.android?.softwareKeyboardLayoutMode, 'resize');
+  assertEqual(`${variant} Expo Image plugin`, Boolean(imagePlugin), true);
   assertEqual(
     `${variant} generated development scheme`,
     devClientPlugin?.[1]?.addGeneratedScheme,
