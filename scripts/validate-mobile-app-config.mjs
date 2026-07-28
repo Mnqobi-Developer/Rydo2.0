@@ -35,7 +35,7 @@ for (const [variant, settings] of Object.entries(variants)) {
     variant === 'development'
       ? 'http://127.0.0.1:5190'
       : `https://api-${variant}.rydo.test`;
-  const result = spawnSync('npx', ['expo', 'config', '--json', '--type', 'public'], {
+  const result = spawnSync('npx', ['expo', 'config', '--json', '--type', 'prebuild'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     shell: process.platform === 'win32',
@@ -44,6 +44,8 @@ for (const [variant, settings] of Object.entries(variants)) {
       APP_VARIANT: variant,
       EXPO_PUBLIC_APP_ENV: variant,
       EXPO_PUBLIC_API_BASE_URL: apiBaseUrl,
+      GOOGLE_MAPS_ANDROID_API_KEY: 'test-android-maps-key',
+      GOOGLE_MAPS_IOS_API_KEY: 'test-ios-maps-key',
     },
   });
 
@@ -66,6 +68,8 @@ for (const [variant, settings] of Object.entries(variants)) {
   assertEqual(`${variant} iOS bundle identifier`, config.ios?.bundleIdentifier, expectedIdentifier);
   assertEqual(`${variant} scheme`, config.scheme, expectedScheme);
   assertEqual(`${variant} manifest marker`, config.extra?.appVariant, variant);
+  assertEqual(`${variant} Android Maps key`, config.android?.config?.googleMaps?.apiKey, 'test-android-maps-key');
+  assertEqual(`${variant} iOS Maps key`, config.ios?.config?.googleMapsApiKey, 'test-ios-maps-key');
   assertEqual(
     `${variant} generated development scheme`,
     devClientPlugin?.[1]?.addGeneratedScheme,

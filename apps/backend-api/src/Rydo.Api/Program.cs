@@ -138,6 +138,18 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 AutoReplenishment = true,
             }));
+    options.AddPolicy("maps", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.User.FindFirst("sub")?.Value
+                ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                QueueLimit = 0,
+                Window = TimeSpan.FromMinutes(1),
+                AutoReplenishment = true,
+            }));
     options.AddPolicy("trip-matching", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",

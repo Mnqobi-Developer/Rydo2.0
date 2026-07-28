@@ -34,3 +34,6 @@ logout action that revokes the backend session before clearing local data.
 
 Only route and layout files belong in `src/app`. Components, features, hooks,
 services, and theme code live in dedicated directories under `src`.
+
+See [Maps and location](../../docs/maps-and-location.md) for Google key
+restrictions, EAS variables, and the explicit foreground permission flow.
