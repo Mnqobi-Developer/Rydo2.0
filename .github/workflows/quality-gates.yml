@@ -126,6 +126,22 @@ jobs:
     name: Backend API
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5-alpine
+        env:
+          POSTGRES_DB: rydo
+          POSTGRES_USER: rydo
+          POSTGRES_PASSWORD: rydo_local
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rydo -d rydo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ConnectionStrings__RydoDatabase: Host=127.0.0.1;Port=5432;Database=rydo;Username=rydo;Password=rydo_local
     defaults:
       run:
         working-directory: apps/backend-api
@@ -157,6 +173,19 @@ jobs:
           dotnet tool restore
           dotnet tool run dotnet-ef migrations has-pending-model-changes --no-build --configuration Release --project src/Rydo.Infrastructure --startup-project src/Rydo.Api
           dotnet tool run dotnet-ef migrations script --idempotent --no-build --configuration Release --project src/Rydo.Infrastructure --startup-project src/Rydo.Api --output ${{ runner.temp }}/rydo-migrations.sql
+          dotnet tool run dotnet-ef database update --no-build --configuration Release --project src/Rydo.Infrastructure --startup-project src/Rydo.Api
+
+      - name: Verify row-level security
+        run: |
+          docker run --rm --network host \
+            --env PGPASSWORD=rydo_local \
+            --volume "$PWD/scripts:/scripts:ro" \
+            --entrypoint psql \
+            postgis/postgis:17-3.5-alpine \
+            --host 127.0.0.1 \
+            --username rydo \
+            --dbname rydo \
+            --file /scripts/verify-rls.sql
 
       - name: Test
         run: dotnet test Rydo.Backend.slnx --no-build --configuration Release

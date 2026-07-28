@@ -18,6 +18,12 @@ Core domains include identity and sessions, passengers, driver onboarding,
 vehicles, trips, matching, payments, ratings, disputes, administration, audit
 logging, and real-time communication.
 
+The API is also the database security boundary. RLS is enabled without client
+policies on every RYDO table in Supabase's exposed `public` schema, so the Data
+API denies Passenger, Driver, and Admin frontend access by default. The trusted
+backend database role owns business access; application authorization remains in
+the API. An event trigger enables RLS automatically for new public tables.
+
 Trip state transitions are controlled by the backend: `Matching`,
 `DriverAssigned`, `DriverArriving`, `InProgress`, `Completed`, `Cancelled`, and
 `Expired`. Clients cannot bypass or invent these transitions.
