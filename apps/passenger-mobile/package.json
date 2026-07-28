@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@googlemaps/js-api-loader": "^2.1.1",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@microsoft/signalr": "^10.0.0",
     "@rydo/mobile-api-client": "file:../../packages/mobile-api-client",
@@ -32,6 +33,7 @@
     "react-native-worklets": "0.10.0"
   },
   "devDependencies": {
+    "@types/google.maps": "^3.65.3",
     "@types/react": "~19.2.2",
     "cross-env": "^10.1.0",
     "eslint": "^9.0.0",

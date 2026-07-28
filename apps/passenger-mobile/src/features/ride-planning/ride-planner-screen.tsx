@@ -47,8 +47,8 @@ export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: Ri
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [pickup, setPickup] = useState<Place | null>(null);
   const [destination, setDestination] = useState<Place | null>(null);
-  const [message, setMessage] = useState('Long-press the map or search for a destination.');
-  const sessionToken = useRef(createSessionToken()).current;
+  const [message, setMessage] = useState('Search or choose a point on the map.');
+  const sessionTokenRef = useRef(createSessionToken());
 
   useEffect(() => {
     const timeout = setTimeout(() => setDebouncedQuery(query.trim()), 350);
@@ -59,7 +59,10 @@ export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: Ri
     queryKey: ['maps', 'autocomplete', debouncedQuery, pickup?.location],
     enabled: debouncedQuery.length >= 3,
     queryFn: ({ signal }) => {
-      const params = new URLSearchParams({ query: debouncedQuery, sessionToken });
+      const params = new URLSearchParams({
+        query: debouncedQuery,
+        sessionToken: sessionTokenRef.current,
+      });
       if (pickup) {
         params.set('latitude', String(pickup.location.latitude));
         params.set('longitude', String(pickup.location.longitude));
@@ -119,17 +122,23 @@ export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: Ri
         `/api/v1/maps/geocode/reverse?latitude=${location.latitude}&longitude=${location.longitude}`,
       );
       selectPlace(place, field);
-    } catch {
+    } catch (error) {
       selectPlace({ placeId: '', name: 'Pinned location', address: 'Pinned location', location }, field);
-      setMessage('Location pinned. Sign in and configure Maps to resolve its address.');
+      setMessage(mapErrorMessage(error, 'Location pinned, but its address could not be resolved.'));
     }
   }
 
   async function selectPrediction(prediction: PlacePrediction) {
-    const place = await apiClient.get<Place>(
-      `/api/v1/maps/places/${encodeURIComponent(prediction.placeId)}?sessionToken=${encodeURIComponent(sessionToken)}`,
-    );
-    selectPlace(place, activeField);
+    setMessage('Loading this place…');
+    try {
+      const place = await apiClient.get<Place>(
+        `/api/v1/maps/places/${encodeURIComponent(prediction.placeId)}?sessionToken=${encodeURIComponent(sessionTokenRef.current)}`,
+      );
+      selectPlace(place, activeField);
+      sessionTokenRef.current = createSessionToken();
+    } catch (error) {
+      setMessage(mapErrorMessage(error, 'This place could not be loaded.'));
+    }
   }
 
   function selectPlace(place: Place, field: Field) {
@@ -207,6 +216,11 @@ export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: Ri
           returnKeyType="search"
         />
         {autocomplete.isFetching ? <ActivityIndicator color={colors.blue} /> : null}
+        {autocomplete.error ? (
+          <Text selectable style={styles.error}>
+            {mapErrorMessage(autocomplete.error, 'Places search is temporarily unavailable.')}
+          </Text>
+        ) : null}
         {autocomplete.data?.slice(0, 4).map((prediction) => (
           <TouchableOpacity
             key={prediction.placeId}
@@ -218,6 +232,11 @@ export function RidePlannerScreen({ greetingName, profileReady, activeTrip }: Ri
           </TouchableOpacity>
         ))}
         {route.isFetching ? <Text selectable style={styles.status}>Calculating the fastest route…</Text> : null}
+        {route.error ? (
+          <Text selectable style={styles.error}>
+            {mapErrorMessage(route.error, 'A route could not be calculated for these locations.')}
+          </Text>
+        ) : null}
         {route.data ? (
           <View style={{ gap: spacing.md }}>
             <Text selectable style={styles.routeSummary}>
@@ -260,6 +279,16 @@ function LocationInput({ label, value, active, onPress }: { label: string; value
 
 function createSessionToken() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function mapErrorMessage(error: unknown, fallback: string) {
+  if (!isApiError(error)) return fallback;
+
+  if (error.status === 503) {
+    return 'Google Maps is not configured or is temporarily unavailable.';
+  }
+
+  return error.problem?.detail ?? error.message;
 }
 
 function formatTripStatus(status: Trip['status']) {

@@ -40,6 +40,14 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "appVariant": "production",
+      "router": {},
+      "eas": {
+        "projectId": "f0d1c7fb-6724-4317-a87b-84406c274e35"
+      }
+    },
+    "owner": "lenkantereke25"
   }
 }

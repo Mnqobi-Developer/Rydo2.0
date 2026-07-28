@@ -86,6 +86,20 @@ public sealed class GoogleMapService(
             $"https://maps.googleapis.com/maps/api/geocode/json?latlng={latitude},{longitude}&region=za&key={Uri.EscapeDataString(RequireApiKey())}",
             includeKeyHeader: false);
         using var document = await SendAsync(request, cancellationToken);
+        var status = document.RootElement.TryGetProperty("status", out var statusValue)
+            ? statusValue.GetString()
+            : null;
+        if (string.Equals(status, "ZERO_RESULTS", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (!string.Equals(status, "OK", StringComparison.Ordinal))
+        {
+            throw new MapProviderUnavailableException(
+                "Google Maps rejected the reverse-geocoding request.");
+        }
+
         if (!document.RootElement.TryGetProperty("results", out var results) || results.GetArrayLength() == 0)
         {
             return null;
@@ -126,7 +140,7 @@ public sealed class GoogleMapService(
         var duration = result.GetProperty("duration").GetString() ?? "0s";
         return new RouteResult(
             result.GetProperty("distanceMeters").GetInt32(),
-            int.TryParse(duration.TrimEnd('s'), out var seconds) ? seconds : 0,
+            ParseDurationSeconds(duration),
             result.GetProperty("polyline").GetProperty("encodedPolyline").GetString() ?? string.Empty);
     }
 
@@ -185,6 +199,15 @@ public sealed class GoogleMapService(
             latLng = new { latitude = location.Latitude, longitude = location.Longitude },
         },
     };
+
+    private static int ParseDurationSeconds(string duration) =>
+        double.TryParse(
+            duration.TrimEnd('s'),
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
+            out var seconds)
+            ? (int)Math.Ceiling(seconds)
+            : 0;
 
     private static PlaceResult ParsePlace(JsonElement place)
     {
