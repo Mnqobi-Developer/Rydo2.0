@@ -6,6 +6,7 @@ using Rydo.Application.Admin;
 using Rydo.Application.Drivers;
 using Rydo.Application.Disputes;
 using Rydo.Application.Matching;
+using Rydo.Application.Maps;
 using Rydo.Application.Passengers;
 using Rydo.Application.Payments;
 using Rydo.Application.Ratings;
@@ -15,6 +16,7 @@ using Rydo.Infrastructure.Admin;
 using Rydo.Infrastructure.Drivers;
 using Rydo.Infrastructure.Disputes;
 using Rydo.Infrastructure.Matching;
+using Rydo.Infrastructure.Maps;
 using Rydo.Infrastructure.Passengers;
 using Rydo.Infrastructure.Payments;
 using Rydo.Infrastructure.Persistence;
@@ -64,6 +66,16 @@ public static class DependencyInjection
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IRatingService, RatingService>();
         services.AddScoped<ITripService, TripService>();
+        services.AddOptions<GoogleMapsOptions>()
+            .Bind(configuration.GetSection(GoogleMapsOptions.SectionName));
+        services.AddSingleton(new HttpClient(new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        })
+        {
+            Timeout = TimeSpan.FromSeconds(10),
+        });
+        services.AddSingleton<IMapService, GoogleMapService>();
         services.AddOptions<PayFastOptions>()
             .Bind(configuration.GetSection(PayFastOptions.SectionName));
         services.AddSingleton<PayFastHttpClient>();

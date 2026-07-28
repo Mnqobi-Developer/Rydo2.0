@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { queryClient } from '@/api';
 import { AuthSessionProvider } from '@/auth/session';
 import { colors } from '@/theme/colors';
+import '@/location/background-location-task';
 
 export default function RootLayout() {
   return (
