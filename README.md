@@ -35,9 +35,12 @@ npm install
 npm run start
 ```
 
-Scan the Metro QR code with Expo Go while the development machine and phone are
-on the same network. Configure a phone-accessible API URL first; see
-[API environments](docs/api-environments.md).
+Install a RYDO development client, then scan the Metro QR code while the
+development machine and phone are on the same network. Configure a
+phone-accessible API URL first; see [Mobile development
+builds](docs/mobile-development-builds.md) and [API
+environments](docs/api-environments.md). Expo Go is retained only for explicit
+compatibility checks.
 
 ## Admin dashboard
 

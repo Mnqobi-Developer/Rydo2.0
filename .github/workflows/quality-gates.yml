@@ -79,8 +79,12 @@ jobs:
       - name: Verify Expo configuration
         run: npm run doctor
 
+      - name: Verify native app variants
+        run: npm run config:validate
+
       - name: Bundle application
         env:
+          APP_VARIANT: development
           EXPO_PUBLIC_APP_ENV: development
           EXPO_PUBLIC_API_BASE_URL: http://127.0.0.1:5190
         run: npx expo export --platform web
@@ -156,8 +160,12 @@ jobs:
       - name: Verify Expo configuration
         run: npm run doctor
 
+      - name: Verify native app variants
+        run: npm run config:validate
+
       - name: Bundle application
         env:
+          APP_VARIANT: development
           EXPO_PUBLIC_APP_ENV: development
           EXPO_PUBLIC_API_BASE_URL: http://127.0.0.1:5190
         run: npx expo export --platform web

@@ -8,12 +8,18 @@ npm install
 npm run start
 ```
 
+`npm run start` targets the RYDO Passenger development client. Follow
+[Mobile development builds](../../docs/mobile-development-builds.md) to link the
+Passenger EAS project and create the first Android or iOS binary. Use
+`npm run start:go` only for an intentional Expo Go compatibility check.
+
 Available checks:
 
 ```powershell
 npm run lint
 npm run typecheck
 npm run doctor
+npm run config:validate
 npm run audit:production
 ```
 
