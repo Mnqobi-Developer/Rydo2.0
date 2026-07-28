@@ -20,6 +20,10 @@ contracts and visual primitives.
 `packages/mobile-api-client` is the shared authenticated transport and TanStack
 Query foundation used by both mobile applications.
 
+`packages/mobile-design-system` contains shared brand tokens, map-first UI
+components, and native interaction primitives. See [Mobile design system and
+native interactions](docs/mobile-design-system.md).
+
 ## Current milestone
 
 Passenger, Driver, Admin, and Backend application foundations are now

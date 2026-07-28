@@ -34,6 +34,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const settings = variants[variant];
   const plugins: NonNullable<ExpoConfig['plugins']> = [
     ...(config.plugins ?? []),
+    'expo-image',
     [
       'expo-dev-client',
       {
@@ -73,6 +74,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     android: {
       ...config.android,
       package: `za.co.rydo.driver${settings.identifierSuffix}`,
+      softwareKeyboardLayoutMode: 'resize',
       config: {
         ...config.android?.config,
         ...(androidMapsKey ? { googleMaps: { apiKey: androidMapsKey } } : {}),
