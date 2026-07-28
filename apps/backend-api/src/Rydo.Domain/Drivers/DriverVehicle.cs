@@ -107,6 +107,41 @@ public sealed class DriverVehicle
         UpdatedAt = updatedAt;
     }
 
+    public void Approve(DateTimeOffset reviewedAt)
+    {
+        RequirePendingReview();
+        ReviewStatus = DriverVehicleReviewStatus.Approved;
+        ReviewedAt = reviewedAt;
+        RejectionReason = null;
+        UpdatedAt = reviewedAt;
+    }
+
+    public void Reject(string reason, DateTimeOffset reviewedAt)
+    {
+        RequirePendingReview();
+        ReviewStatus = DriverVehicleReviewStatus.Rejected;
+        ReviewedAt = reviewedAt;
+        RejectionReason = NormalizeReason(reason);
+        UpdatedAt = reviewedAt;
+    }
+
+    private void RequirePendingReview()
+    {
+        if (ReviewStatus != DriverVehicleReviewStatus.PendingReview)
+        {
+            throw new InvalidOperationException("Only a pending Driver vehicle can be reviewed.");
+        }
+    }
+
+    private static string NormalizeReason(string reason)
+    {
+        var normalized = reason.Trim();
+        return normalized.Length is > 0 and <= 500
+            ? normalized
+            : throw new ArgumentException(
+                "Vehicle rejection reasons must contain between 1 and 500 characters.");
+    }
+
     private static string NormalizeText(string value)
     {
         return value.Trim();

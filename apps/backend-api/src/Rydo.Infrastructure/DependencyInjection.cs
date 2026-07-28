@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Rydo.Application.Authentication;
+using Rydo.Application.Admin;
 using Rydo.Application.Drivers;
 using Rydo.Application.Disputes;
 using Rydo.Application.Matching;
@@ -10,6 +11,7 @@ using Rydo.Application.Payments;
 using Rydo.Application.Ratings;
 using Rydo.Application.Trips;
 using Rydo.Infrastructure.Authentication;
+using Rydo.Infrastructure.Admin;
 using Rydo.Infrastructure.Drivers;
 using Rydo.Infrastructure.Disputes;
 using Rydo.Infrastructure.Matching;
@@ -43,7 +45,15 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
         services.AddSingleton(TimeProvider.System);
+        services.AddOptions<AdminAccessOptions>()
+            .Bind(configuration.GetSection(AdminAccessOptions.SectionName))
+            .Validate(options => options.IsValid(),
+                "Enabled AdminAccess requires a valid bootstrap email, international phone number, and password of at least 16 characters.")
+            .ValidateOnStart();
+        services.AddScoped<AdminBootstrapService>();
         services.AddScoped<CryptoTokenService>();
+        services.AddScoped<IAdminAuthenticationService, AdminAuthenticationService>();
+        services.AddScoped<IAdminOperationsService, AdminOperationsService>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
         services.AddScoped<IDriverDocumentService, DriverDocumentService>();
         services.AddScoped<IDriverProfileService, DriverProfileService>();

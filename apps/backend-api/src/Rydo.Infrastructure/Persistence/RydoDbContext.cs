@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Rydo.Domain.Drivers;
+using Rydo.Domain.Admin;
 using Rydo.Domain.Disputes;
 using Rydo.Domain.Identity;
 using Rydo.Domain.Matching;
@@ -14,6 +15,10 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
     : DbContext(options)
 {
     public DbSet<UserAccount> Users => Set<UserAccount>();
+
+    public DbSet<AdminCredential> AdminCredentials => Set<AdminCredential>();
+
+    public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
 
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
 
@@ -54,6 +59,35 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
             entity.Property(user => user.PhoneNumber).HasMaxLength(16).IsRequired();
             entity.Property(user => user.Role).HasConversion<string>().HasMaxLength(16);
             entity.HasIndex(user => user.PhoneNumber).IsUnique();
+        });
+
+        modelBuilder.Entity<AdminCredential>(entity =>
+        {
+            entity.ToTable("admin_credentials");
+            entity.HasKey(credential => credential.UserId);
+            entity.Property(credential => credential.Email).HasMaxLength(254).IsRequired();
+            entity.Property(credential => credential.PasswordHash).HasMaxLength(256).IsRequired();
+            entity.HasOne<UserAccount>()
+                .WithOne()
+                .HasForeignKey<AdminCredential>(credential => credential.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(credential => credential.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<AdminAuditLog>(entity =>
+        {
+            entity.ToTable("admin_audit_logs");
+            entity.HasKey(audit => audit.Id);
+            entity.Property(audit => audit.Action).HasMaxLength(64).IsRequired();
+            entity.Property(audit => audit.EntityType).HasMaxLength(64).IsRequired();
+            entity.Property(audit => audit.Details).HasMaxLength(2000).IsRequired();
+            entity.HasOne<UserAccount>()
+                .WithMany()
+                .HasForeignKey(audit => audit.AdminUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(audit => new { audit.CreatedAt, audit.Id });
+            entity.HasIndex(audit => new { audit.EntityType, audit.EntityId });
+            entity.HasIndex(audit => audit.AdminUserId);
         });
 
         modelBuilder.Entity<OtpChallenge>(entity =>

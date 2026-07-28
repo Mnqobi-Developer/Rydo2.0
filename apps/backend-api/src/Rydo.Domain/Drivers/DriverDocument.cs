@@ -87,4 +87,37 @@ public sealed class DriverDocument
 
         SupersededAt ??= supersededAt;
     }
+
+    public void Approve(DateTimeOffset reviewedAt)
+    {
+        RequirePendingReview();
+        ReviewStatus = DriverDocumentReviewStatus.Approved;
+        ReviewedAt = reviewedAt;
+        RejectionReason = null;
+    }
+
+    public void Reject(string reason, DateTimeOffset reviewedAt)
+    {
+        RequirePendingReview();
+        ReviewStatus = DriverDocumentReviewStatus.Rejected;
+        ReviewedAt = reviewedAt;
+        RejectionReason = NormalizeReason(reason);
+    }
+
+    private void RequirePendingReview()
+    {
+        if (ReviewStatus != DriverDocumentReviewStatus.PendingReview)
+        {
+            throw new InvalidOperationException("Only a pending driver document can be reviewed.");
+        }
+    }
+
+    private static string NormalizeReason(string reason)
+    {
+        var normalized = reason.Trim();
+        return normalized.Length is > 0 and <= 500
+            ? normalized
+            : throw new ArgumentException(
+                "Document rejection reasons must contain between 1 and 500 characters.");
+    }
 }
