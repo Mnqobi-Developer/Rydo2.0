@@ -37,3 +37,7 @@ services, and theme code live in dedicated directories under `src`.
 
 See [Maps and location](../../docs/maps-and-location.md) for Google key
 restrictions, EAS variables, and the explicit foreground permission flow.
+
+The [mobile real-time foundation](../../docs/mobile-realtime.md) connects the
+authenticated operations hub while the app is foregrounded and reconciles
+active REST queries after reconnecting.

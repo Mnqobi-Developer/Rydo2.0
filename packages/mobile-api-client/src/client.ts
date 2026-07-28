@@ -74,6 +74,7 @@ export interface ApiClient {
     subscribe(listener: () => void): () => void;
     restoreSession(signal?: AbortSignal): Promise<AuthSessionSnapshot>;
     refreshSession(): Promise<TokenPair>;
+    getAccessToken(): Promise<string>;
     logout(signal?: AbortSignal): Promise<void>;
     revokeSession(signal?: AbortSignal): Promise<void>;
   };
@@ -459,6 +460,19 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       },
       restoreSession,
       refreshSession: rotateTokens,
+      async getAccessToken() {
+        let tokens = await options.tokenStore.get();
+
+        if (!tokens || isExpired(tokens.refreshTokenExpiresAt, now())) {
+          return expireAuthentication();
+        }
+
+        if (isExpired(tokens.accessTokenExpiresAt, now() + refreshLeewayMs)) {
+          tokens = await rotateTokens();
+        }
+
+        return tokens.accessToken;
+      },
       logout,
       revokeSession: logout,
     },
