@@ -33,7 +33,8 @@ npm run start
 ```
 
 Scan the Metro QR code with Expo Go while the development machine and phone are
-on the same network.
+on the same network. Configure a phone-accessible API URL first; see
+[API environments](docs/api-environments.md).
 
 ## Admin dashboard
 
@@ -54,3 +55,6 @@ dotnet run --project apps/backend-api/src/Rydo.Api
 
 Changes use focused branches, conventional commits, pull requests, and required
 quality checks. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Development, staging, and production API targets are documented in
+[API environments](docs/api-environments.md).

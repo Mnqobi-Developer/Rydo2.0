@@ -30,10 +30,18 @@ dotnet restore apps/backend-api/Rydo.Backend.slnx
 dotnet run --project apps/backend-api/src/Rydo.Api
 ```
 
-The local launch profile serves the API on `http://localhost:5190`.
+The local launch profile listens on port 5190 on all local interfaces. Browsers
+on this computer can use `http://localhost:5190`; physical phones must use the
+computer's LAN address. Run `scripts/start-lan.ps1` from the repository root to
+print the correct URL. The complete environment setup is documented in
+[`docs/api-environments.md`](../../docs/api-environments.md).
 
 Production environments must supply the database connection securely through
 `ConnectionStrings__RydoDatabase`. Never commit hosted credentials.
+
+`Dockerfile` packages the API as a non-root container listening on port 8080.
+Set `ASPNETCORE_ENVIRONMENT` and all server secrets in the hosting platform;
+environment-specific settings are never baked into the image.
 
 ### Database access boundary
 
