@@ -44,6 +44,9 @@ cancelled.
 `AuthSessionProvider` restores the encrypted session at startup and exposes
 automatic token refresh, expired-session state, retryable restoration, and a
 logout action that revokes the backend session before clearing local data.
+Android and iOS persist tokens only through Expo SecureStore. The optional web
+preview uses an in-memory token store, so a browser refresh intentionally signs
+the preview out instead of placing credentials in browser storage.
 
 Only route and layout files belong in `src/app`. Components, features, hooks,
 services, and theme code live in dedicated directories under `src`.

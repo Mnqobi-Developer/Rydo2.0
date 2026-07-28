@@ -32,13 +32,15 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   const logout = useCallback(async () => {
     try {
       await apiClient.auth.logout();
+    } catch {
+      // The API client clears local credentials even when revocation is offline.
     } finally {
       queryClient.clear();
     }
   }, []);
 
   const retryRestore = useCallback(async () => {
-    await apiClient.auth.restoreSession();
+    await apiClient.auth.restoreSession().catch(() => undefined);
   }, []);
 
   const value = useMemo(
