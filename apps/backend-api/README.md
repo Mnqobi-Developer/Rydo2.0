@@ -35,6 +35,20 @@ The local launch profile serves the API on `http://localhost:5190`.
 Production environments must supply the database connection securely through
 `ConnectionStrings__RydoDatabase`. Never commit hosted credentials.
 
+### Database access boundary
+
+All RYDO application tables in Supabase's exposed `public` schema have PostgreSQL
+row-level security enabled with no `anon` or `authenticated` policies. This is
+intentional deny-by-default behavior: mobile and dashboard clients use the RYDO
+API and cannot read or mutate business tables through Supabase's Data API.
+
+The API currently connects through a trusted database-owner credential, which
+PostgreSQL allows to bypass ordinary RLS. Keep that credential server-side only.
+Future public tables are automatically protected by the
+`rydo_enable_rls_on_public_table` event trigger. The PostGIS-owned
+`public.spatial_ref_sys` table is deliberately excluded because it is managed by
+the extension rather than RYDO.
+
 ## Foundation endpoints
 
 - `GET /health/live` — process liveness for CI and future hosting probes.
