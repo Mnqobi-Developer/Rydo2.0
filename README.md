@@ -14,8 +14,11 @@ operations teams.
 - `apps/backend-api` — Layered ASP.NET Core API with SignalR and
   PostgreSQL/PostGIS-ready persistence.
 
-Shared packages will live under `packages/` as the applications begin to share
-stable contracts and visual primitives.
+Shared packages live under `packages/` as the applications begin to share stable
+contracts and visual primitives.
+
+`packages/mobile-api-client` is the shared authenticated transport and TanStack
+Query foundation used by both mobile applications.
 
 ## Current milestone
 
