@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Rydo.Application.Trips;
 using Rydo.Application.Realtime;
 using Rydo.Domain.Identity;
+using Rydo.Domain.Pricing;
 using Rydo.Domain.Trips;
 using Rydo.Infrastructure.Persistence;
 
@@ -20,8 +21,15 @@ public sealed class TripService(
         string destinationAddress,
         double destinationLatitude,
         double destinationLongitude,
+        Guid fareQuoteId,
+        RideCategory rideCategory,
         CancellationToken cancellationToken)
     {
+        if (pickupLatitude == destinationLatitude && pickupLongitude == destinationLongitude)
+        {
+            throw new TripValidationException("Pickup and destination must be different locations.");
+        }
+
         var passengerExists = await database.Users.AnyAsync(
             user => user.Id == passengerUserId &&
                 user.IsActive &&
@@ -50,6 +58,33 @@ public sealed class TripService(
                 "A passenger cannot request another trip while one is active.");
         }
 
+        var now = timeProvider.GetUtcNow();
+        var quote = await database.FareQuotes
+            .Include(item => item.Options)
+            .SingleOrDefaultAsync(item => item.Id == fareQuoteId, cancellationToken)
+            ?? throw new FareQuoteConflictException("The fare quote does not exist. Request a new quote.");
+
+        FareQuoteOption selectedFare;
+        try
+        {
+            selectedFare = quote.Select(passengerUserId, rideCategory, now);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw new TripAccessException("This fare quote belongs to another passenger.");
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new FareQuoteConflictException(exception.Message);
+        }
+
+        if (!CoordinatesMatch(quote, pickupLatitude, pickupLongitude,
+                destinationLatitude, destinationLongitude))
+        {
+            throw new FareQuoteConflictException(
+                "Pickup or destination changed after this quote was created. Request a new quote.");
+        }
+
         Trip trip;
 
         try
@@ -62,13 +97,19 @@ public sealed class TripService(
                 destinationAddress,
                 destinationLatitude,
                 destinationLongitude,
-                timeProvider.GetUtcNow());
+                quote.Id,
+                rideCategory,
+                selectedFare.Total,
+                quote.Currency,
+                quote.PricingVersion,
+                now);
         }
         catch (ArgumentException exception)
         {
             throw new TripValidationException(exception.Message);
         }
 
+        quote.MarkUsed(now);
         database.Trips.Add(trip);
         await SaveChangesAsync(cancellationToken);
         var result = ToResult(trip);
@@ -107,8 +148,7 @@ public sealed class TripService(
             _ => database.Trips.Where(_ => false),
         };
 
-        return await Project(query)
-            .OrderByDescending(trip => trip.RequestedAt)
+        return await Project(query.OrderByDescending(trip => trip.RequestedAt))
             .ToListAsync(cancellationToken);
     }
 
@@ -216,6 +256,11 @@ public sealed class TripService(
             trip.DestinationAddress,
             trip.DestinationLatitude,
             trip.DestinationLongitude,
+            trip.FareQuoteId,
+            trip.RideCategory,
+            trip.EstimatedFareAmount,
+            trip.FareCurrency,
+            trip.PricingVersion,
             trip.Status,
             trip.RequestedAt,
             trip.UpdatedAt,
@@ -242,6 +287,11 @@ public sealed class TripService(
             trip.DestinationAddress,
             trip.DestinationLatitude,
             trip.DestinationLongitude,
+            trip.FareQuoteId,
+            trip.RideCategory,
+            trip.EstimatedFareAmount,
+            trip.FareCurrency,
+            trip.PricingVersion,
             trip.Status,
             trip.RequestedAt,
             trip.UpdatedAt,
@@ -255,4 +305,17 @@ public sealed class TripService(
             trip.FinalFareAmount,
             trip.Version);
     }
+
+    private static bool CoordinatesMatch(
+        FareQuote quote,
+        double pickupLatitude,
+        double pickupLongitude,
+        double destinationLatitude,
+        double destinationLongitude) =>
+        Close(quote.PickupLatitude, pickupLatitude)
+        && Close(quote.PickupLongitude, pickupLongitude)
+        && Close(quote.DestinationLatitude, destinationLatitude)
+        && Close(quote.DestinationLongitude, destinationLongitude);
+
+    private static bool Close(double left, double right) => Math.Abs(left - right) < 0.000001;
 }

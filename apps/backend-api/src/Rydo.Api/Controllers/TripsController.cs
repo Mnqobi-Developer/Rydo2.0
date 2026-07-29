@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Rydo.Application.Matching;
 using Rydo.Application.Trips;
 using Rydo.Domain.Identity;
+using Rydo.Domain.Pricing;
 
 namespace Rydo.Api.Controllers;
 
@@ -44,6 +45,8 @@ public sealed class TripsController(
                 request.DestinationAddress,
                 request.DestinationLatitude,
                 request.DestinationLongitude,
+                request.FareQuoteId,
+                request.RideCategory,
                 cancellationToken);
 
             return CreatedAtAction(nameof(GetTrip), new { tripId = trip.Id }, trip);
@@ -55,6 +58,10 @@ public sealed class TripsController(
         catch (ActiveTripConflictException exception)
         {
             return ConflictProblem("Active trip conflict", exception.Message);
+        }
+        catch (FareQuoteConflictException exception)
+        {
+            return ConflictProblem("Fare quote conflict", exception.Message);
         }
         catch (TripValidationException exception)
         {
@@ -300,7 +307,9 @@ public sealed record RequestTripRequest(
     [Range(-90, 90)]
     double DestinationLatitude,
     [Range(-180, 180)]
-    double DestinationLongitude);
+    double DestinationLongitude,
+    Guid FareQuoteId,
+    RideCategory RideCategory);
 
 public sealed record CancelTripRequest(
     [MaxLength(250)]

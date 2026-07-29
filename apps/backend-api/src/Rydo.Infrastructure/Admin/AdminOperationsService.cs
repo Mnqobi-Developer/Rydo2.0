@@ -324,11 +324,11 @@ public sealed class AdminOperationsService(
         var query = database.Trips.AsNoTracking();
         if (status is not null) query = query.Where(trip => trip.Status == status);
         var totalCount = await query.CountAsync(cancellationToken);
-        var items = await ProjectTrips(query)
+        var itemsQuery = query
             .OrderByDescending(trip => trip.RequestedAt)
             .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
+            .Take(pageSize);
+        var items = await ProjectTrips(itemsQuery).ToListAsync(cancellationToken);
         return new PagedResult<TripResult>(items, page, pageSize, totalCount);
     }
 
@@ -584,6 +584,11 @@ public sealed class AdminOperationsService(
             trip.DestinationAddress,
             trip.DestinationLatitude,
             trip.DestinationLongitude,
+            trip.FareQuoteId,
+            trip.RideCategory,
+            trip.EstimatedFareAmount,
+            trip.FareCurrency,
+            trip.PricingVersion,
             trip.Status,
             trip.RequestedAt,
             trip.UpdatedAt,

@@ -13,10 +13,16 @@ export function PassengerHomeScreen() {
   const profile = useQuery(passengerProfileQuery);
   const trips = useQuery(passengerTripsQuery);
   const activeTrip = trips.data?.find((trip) => trip.status !== 'Completed' && trip.status !== 'Cancelled') ?? null;
+  const recentTrips = trips.data?.filter((trip) => trip.status === 'Completed').slice(0, 10) ?? [];
 
   return (
     <View style={{ flex: 1 }}>
-      <RidePlannerScreen greetingName={profile.data?.firstName} profileReady={Boolean(profile.data)} activeTrip={activeTrip} />
+      <RidePlannerScreen
+        greetingName={profile.data?.firstName}
+        profileReady={Boolean(profile.data)}
+        activeTrip={activeTrip}
+        recentTrips={recentTrips}
+      />
       {!profile.isLoading && !profile.data ? (
         <View
           style={{

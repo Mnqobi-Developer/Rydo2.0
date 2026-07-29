@@ -1,4 +1,4 @@
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetScrollView, BottomSheetView } from '@gorhom/bottom-sheet';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 import type { ViewStyle } from 'react-native';
@@ -11,6 +11,7 @@ export interface RydoBottomSheetProps {
   snapPoints?: Array<number | `${number}%`>;
   bottomInset?: number;
   contentStyle?: ViewStyle;
+  scrollable?: boolean;
   onChange?(index: number): void;
 }
 
@@ -20,6 +21,7 @@ export function RydoBottomSheet({
   snapPoints = ['38%', '68%'],
   bottomInset = spacing.md,
   contentStyle,
+  scrollable = false,
   onChange,
 }: RydoBottomSheetProps) {
   const stableSnapPoints = useMemo(() => snapPoints, [snapPoints]);
@@ -32,17 +34,30 @@ export function RydoBottomSheet({
       detached
       enableDynamicSizing={false}
       enablePanDownToClose={false}
-      keyboardBehavior="interactive"
+      keyboardBehavior="extend"
       keyboardBlurBehavior="restore"
       android_keyboardInputMode="adjustResize"
-      backgroundStyle={{ backgroundColor: colors.glass, borderRadius: radii.sheet, ...shadows.floating }}
+      backgroundStyle={{ backgroundColor: colors.surfaceElevated, borderRadius: radii.sheet, ...shadows.floating }}
       handleIndicatorStyle={{ width: 42, backgroundColor: colors.border }}
       style={{ marginHorizontal: spacing.md }}
       onChange={onChange}
     >
-      <BottomSheetView style={[{ flex: 1, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.sm }, contentStyle]}>
-        {children}
-      </BottomSheetView>
+      {scrollable ? (
+        <BottomSheetScrollView
+          contentContainerStyle={[
+            { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.sm },
+            contentStyle,
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {children}
+        </BottomSheetScrollView>
+      ) : (
+        <BottomSheetView style={[{ flex: 1, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.sm }, contentStyle]}>
+          {children}
+        </BottomSheetView>
+      )}
     </BottomSheet>
   );
 }

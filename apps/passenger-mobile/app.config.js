@@ -33,6 +33,7 @@ module.exports = ({ config }) => {
   const settings = variants[variant];
   const plugins = [
     ...(config.plugins ?? []),
+    'expo-font',
     'expo-image',
     [
       'expo-dev-client',

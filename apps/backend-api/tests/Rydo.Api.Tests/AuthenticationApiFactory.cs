@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Rydo.Infrastructure.Persistence;
+using Rydo.Application.Maps;
 
 namespace Rydo.Api.Tests;
 
@@ -41,12 +42,34 @@ public sealed class AuthenticationApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<DbContextOptions<RydoDbContext>>();
             services.RemoveAll<IDbContextOptionsConfiguration<RydoDbContext>>();
             services.RemoveAll<TimeProvider>();
+            services.RemoveAll<IMapService>();
             services.AddSingleton<TimeProvider>(Clock);
+            services.AddSingleton<IMapService, TestMapService>();
             services.AddDbContext<RydoDbContext>(options =>
                 options.UseInMemoryDatabase(_databaseName));
             _configureTestServices?.Invoke(services);
         });
     }
+}
+
+internal sealed class TestMapService : IMapService
+{
+    public Task<IReadOnlyList<PlacePredictionResult>> AutocompleteAsync(
+        string query, string sessionToken, GeoCoordinate? locationBias,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<PlacePredictionResult>>([]);
+
+    public Task<PlaceResult?> GetPlaceAsync(
+        string placeId, string sessionToken, CancellationToken cancellationToken) =>
+        Task.FromResult<PlaceResult?>(null);
+
+    public Task<PlaceResult?> ReverseGeocodeAsync(
+        GeoCoordinate location, CancellationToken cancellationToken) =>
+        Task.FromResult<PlaceResult?>(null);
+
+    public Task<RouteResult?> ComputeRouteAsync(
+        RouteRequest request, CancellationToken cancellationToken) =>
+        Task.FromResult<RouteResult?>(new(2_000, 600, "test-route"));
 }
 
 public sealed class AdjustableTimeProvider : TimeProvider

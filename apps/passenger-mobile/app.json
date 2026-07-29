@@ -12,6 +12,7 @@
       "bundleIdentifier": "za.co.rydo.passenger"
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#0B1F3A",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

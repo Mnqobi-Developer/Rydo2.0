@@ -30,6 +30,11 @@ export interface TripRealtimeResult {
   cancelledAt: string | null;
   cancelledByUserId: string | null;
   cancellationReason: string | null;
+  fareQuoteId: string | null;
+  rideCategory: import('./contracts').RideCategory | null;
+  estimatedFareAmount: number | null;
+  fareCurrency: string | null;
+  pricingVersion: string | null;
   finalFareAmount: number | null;
   version: number;
 }
