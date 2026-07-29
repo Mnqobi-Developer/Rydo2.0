@@ -9,6 +9,7 @@ using Rydo.Application.Matching;
 using Rydo.Application.Maps;
 using Rydo.Application.Passengers;
 using Rydo.Application.Payments;
+using Rydo.Application.Pricing;
 using Rydo.Application.Ratings;
 using Rydo.Application.Trips;
 using Rydo.Infrastructure.Authentication;
@@ -19,6 +20,7 @@ using Rydo.Infrastructure.Matching;
 using Rydo.Infrastructure.Maps;
 using Rydo.Infrastructure.Passengers;
 using Rydo.Infrastructure.Payments;
+using Rydo.Infrastructure.Pricing;
 using Rydo.Infrastructure.Persistence;
 using Rydo.Infrastructure.Ratings;
 using Rydo.Infrastructure.Trips;
@@ -64,10 +66,17 @@ public static class DependencyInjection
         services.AddScoped<IDriverMatchingService, DriverMatchingService>();
         services.AddScoped<IPassengerProfileService, PassengerProfileService>();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IPricingService, PricingService>();
         services.AddScoped<IRatingService, RatingService>();
         services.AddScoped<ITripService, TripService>();
         services.AddOptions<GoogleMapsOptions>()
             .Bind(configuration.GetSection(GoogleMapsOptions.SectionName));
+        services.AddOptions<PricingOptions>()
+            .Bind(configuration.GetSection(PricingOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(options => options.IsValid(),
+                "Pricing must define a positive rate and minimum fare for every ride category.")
+            .ValidateOnStart();
         services.AddSingleton(new HttpClient(new SocketsHttpHandler
         {
             PooledConnectionLifetime = TimeSpan.FromMinutes(5),

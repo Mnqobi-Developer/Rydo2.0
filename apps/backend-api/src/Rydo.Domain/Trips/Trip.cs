@@ -1,4 +1,5 @@
 using Rydo.Domain.Identity;
+using Rydo.Domain.Pricing;
 
 namespace Rydo.Domain.Trips;
 
@@ -17,6 +18,11 @@ public sealed class Trip
         string destinationAddress,
         double destinationLatitude,
         double destinationLongitude,
+        Guid fareQuoteId,
+        RideCategory rideCategory,
+        decimal estimatedFareAmount,
+        string fareCurrency,
+        string pricingVersion,
         DateTimeOffset requestedAt)
     {
         Id = id;
@@ -27,6 +33,11 @@ public sealed class Trip
         DestinationAddress = NormalizeAddress(destinationAddress);
         DestinationLatitude = destinationLatitude;
         DestinationLongitude = destinationLongitude;
+        FareQuoteId = fareQuoteId;
+        RideCategory = rideCategory;
+        EstimatedFareAmount = estimatedFareAmount;
+        FareCurrency = fareCurrency;
+        PricingVersion = pricingVersion;
         Status = TripStatus.Requested;
         RequestedAt = requestedAt;
         UpdatedAt = requestedAt;
@@ -50,6 +61,16 @@ public sealed class Trip
     public double DestinationLatitude { get; private set; }
 
     public double DestinationLongitude { get; private set; }
+
+    public Guid? FareQuoteId { get; private set; }
+
+    public RideCategory? RideCategory { get; private set; }
+
+    public decimal? EstimatedFareAmount { get; private set; }
+
+    public string? FareCurrency { get; private set; }
+
+    public string? PricingVersion { get; private set; }
 
     public TripStatus Status { get; private set; }
 
@@ -85,6 +106,11 @@ public sealed class Trip
         string destinationAddress,
         double destinationLatitude,
         double destinationLongitude,
+        Guid fareQuoteId,
+        RideCategory rideCategory,
+        decimal estimatedFareAmount,
+        string fareCurrency,
+        string pricingVersion,
         DateTimeOffset requestedAt)
     {
         ValidateCoordinates(pickupLatitude, pickupLongitude, nameof(pickupLatitude));
@@ -104,6 +130,11 @@ public sealed class Trip
             destinationAddress,
             destinationLatitude,
             destinationLongitude,
+            fareQuoteId,
+            rideCategory,
+            estimatedFareAmount,
+            fareCurrency,
+            pricingVersion,
             requestedAt);
     }
 

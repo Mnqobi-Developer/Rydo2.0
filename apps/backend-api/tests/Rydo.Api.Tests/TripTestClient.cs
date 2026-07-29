@@ -3,6 +3,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Rydo.Application.Authentication;
 using Rydo.Application.Trips;
+using Rydo.Application.Pricing;
+using Rydo.Domain.Pricing;
 
 namespace Rydo.Api.Tests;
 
@@ -28,9 +30,14 @@ internal static class TripTestClient
 
     public static async Task<TripResult> RequestAsync(HttpClient client)
     {
+        var quoteResponse = await client.PostAsJsonAsync(
+            "/api/v1/pricing/quotes",
+            ValidQuoteRequest());
+        quoteResponse.EnsureSuccessStatusCode();
+        var quote = (await quoteResponse.Content.ReadFromJsonAsync<FareQuoteResult>(JsonOptions))!;
         var response = await client.PostAsJsonAsync(
             "/api/v1/trips",
-            ValidRequest());
+            ValidRequest(quote.Id));
         response.EnsureSuccessStatusCode();
         return await ReadAsync(response);
     }
@@ -58,7 +65,7 @@ internal static class TripTestClient
         return (await response.Content.ReadFromJsonAsync<List<TripResult>>(JsonOptions))!;
     }
 
-    public static object ValidRequest()
+    public static object ValidRequest(Guid? quoteId = null, RideCategory category = RideCategory.Solo)
     {
         return new
         {
@@ -68,8 +75,16 @@ internal static class TripTestClient
             destinationAddress = "V&A Waterfront, Cape Town",
             destinationLatitude = -33.9036,
             destinationLongitude = 18.4209,
+            fareQuoteId = quoteId ?? Guid.NewGuid(),
+            rideCategory = category,
         };
     }
+
+    public static object ValidQuoteRequest() => new
+    {
+        pickup = new { latitude = -33.9249, longitude = 18.4241 },
+        destination = new { latitude = -33.9036, longitude = 18.4209 },
+    };
 
     private static JsonSerializerOptions CreateJsonOptions()
     {

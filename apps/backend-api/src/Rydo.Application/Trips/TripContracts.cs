@@ -1,5 +1,6 @@
 using Rydo.Domain.Identity;
 using Rydo.Domain.Trips;
+using Rydo.Domain.Pricing;
 
 namespace Rydo.Application.Trips;
 
@@ -13,6 +14,11 @@ public sealed record TripResult(
     string DestinationAddress,
     double DestinationLatitude,
     double DestinationLongitude,
+    Guid? FareQuoteId,
+    RideCategory? RideCategory,
+    decimal? EstimatedFareAmount,
+    string? FareCurrency,
+    string? PricingVersion,
     TripStatus Status,
     DateTimeOffset RequestedAt,
     DateTimeOffset UpdatedAt,
@@ -36,6 +42,8 @@ public interface ITripService
         string destinationAddress,
         double destinationLatitude,
         double destinationLongitude,
+        Guid fareQuoteId,
+        RideCategory rideCategory,
         CancellationToken cancellationToken);
 
     Task<TripResult?> GetAsync(
@@ -89,3 +97,5 @@ public sealed class PassengerProfileRequiredException : Exception
     {
     }
 }
+
+public sealed class FareQuoteConflictException(string message) : Exception(message);

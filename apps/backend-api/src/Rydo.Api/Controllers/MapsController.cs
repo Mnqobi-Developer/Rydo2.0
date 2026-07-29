@@ -15,7 +15,7 @@ public sealed class MapsController(IMapService maps) : ControllerBase
     [HttpGet("places/autocomplete")]
     public Task<ActionResult<IReadOnlyList<PlacePredictionResult>>> Autocomplete(
         [FromQuery, MinLength(3), MaxLength(160)] string query,
-        [FromQuery, MinLength(8), MaxLength(128)] string sessionToken,
+        [FromQuery, MinLength(8), MaxLength(36)] string sessionToken,
         [FromQuery, Range(-90, 90)] double? latitude,
         [FromQuery, Range(-180, 180)] double? longitude,
         CancellationToken cancellationToken) => RunAsync<IReadOnlyList<PlacePredictionResult>>(async () =>
@@ -30,7 +30,7 @@ public sealed class MapsController(IMapService maps) : ControllerBase
     [HttpGet("places/{placeId}")]
     public Task<ActionResult<PlaceResult>> GetPlace(
         [FromRoute, MinLength(1), MaxLength(512)] string placeId,
-        [FromQuery, MinLength(8), MaxLength(128)] string sessionToken,
+        [FromQuery, MinLength(8), MaxLength(36)] string sessionToken,
         CancellationToken cancellationToken) => RunAsync<PlaceResult>(async () =>
     {
         var place = await maps.GetPlaceAsync(placeId, sessionToken, cancellationToken);

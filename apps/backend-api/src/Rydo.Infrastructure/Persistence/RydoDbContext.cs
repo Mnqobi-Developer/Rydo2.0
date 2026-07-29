@@ -6,6 +6,7 @@ using Rydo.Domain.Identity;
 using Rydo.Domain.Matching;
 using Rydo.Domain.Passengers;
 using Rydo.Domain.Payments;
+using Rydo.Domain.Pricing;
 using Rydo.Domain.Ratings;
 using Rydo.Domain.Trips;
 
@@ -35,6 +36,10 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
     public DbSet<DriverVehicle> DriverVehicles => Set<DriverVehicle>();
 
     public DbSet<Trip> Trips => Set<Trip>();
+
+    public DbSet<FareQuote> FareQuotes => Set<FareQuote>();
+
+    public DbSet<FareQuoteOption> FareQuoteOptions => Set<FareQuoteOption>();
 
     public DbSet<DriverAvailability> DriverAvailability => Set<DriverAvailability>();
 
@@ -234,6 +239,9 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
                 table.HasCheckConstraint(
                     "CK_trips_FinalFareAmount",
                     "\"FinalFareAmount\" IS NULL OR \"FinalFareAmount\" > 0");
+                table.HasCheckConstraint(
+                    "CK_trips_EstimatedFareAmount",
+                    "\"EstimatedFareAmount\" IS NULL OR \"EstimatedFareAmount\" > 0");
             });
             entity.HasKey(trip => trip.Id);
             entity.Property(trip => trip.PickupAddress).HasMaxLength(300).IsRequired();
@@ -241,6 +249,10 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
             entity.Property(trip => trip.Status).HasConversion<string>().HasMaxLength(32);
             entity.Property(trip => trip.CancellationReason).HasMaxLength(250);
             entity.Property(trip => trip.FinalFareAmount).HasPrecision(12, 2);
+            entity.Property(trip => trip.EstimatedFareAmount).HasPrecision(12, 2);
+            entity.Property(trip => trip.RideCategory).HasConversion<string>().HasMaxLength(24);
+            entity.Property(trip => trip.FareCurrency).HasMaxLength(3);
+            entity.Property(trip => trip.PricingVersion).HasMaxLength(64);
             entity.Property(trip => trip.Version).IsConcurrencyToken();
             entity.HasOne<UserAccount>()
                 .WithMany()
@@ -249,6 +261,10 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
             entity.HasOne<UserAccount>()
                 .WithMany()
                 .HasForeignKey(trip => trip.DriverUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<FareQuote>()
+                .WithOne()
+                .HasForeignKey<Trip>(trip => trip.FareQuoteId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(trip => trip.PassengerUserId)
                 .IsUnique()
@@ -259,6 +275,58 @@ public sealed class RydoDbContext(DbContextOptions<RydoDbContext> options)
                 .HasFilter(
                     "\"DriverUserId\" IS NOT NULL AND \"Status\" IN ('Accepted', 'DriverArrived', 'InProgress')");
             entity.HasIndex(trip => new { trip.Status, trip.RequestedAt });
+            entity.HasIndex(trip => trip.FareQuoteId).IsUnique();
+        });
+
+        modelBuilder.Entity<FareQuote>(entity =>
+        {
+            entity.ToTable("fare_quotes", table =>
+            {
+                table.HasCheckConstraint("CK_fare_quotes_DistanceMeters", "\"DistanceMeters\" > 0");
+                table.HasCheckConstraint("CK_fare_quotes_DurationSeconds", "\"DurationSeconds\" > 0");
+                table.HasCheckConstraint("CK_fare_quotes_Expiry", "\"ExpiresAt\" > \"CreatedAt\"");
+                table.HasCheckConstraint("CK_fare_quotes_DemandMultiplier", "\"DemandMultiplier\" BETWEEN 1 AND 1.5");
+                table.HasCheckConstraint("CK_fare_quotes_PickupLatitude", "\"PickupLatitude\" BETWEEN -90 AND 90");
+                table.HasCheckConstraint("CK_fare_quotes_PickupLongitude", "\"PickupLongitude\" BETWEEN -180 AND 180");
+                table.HasCheckConstraint("CK_fare_quotes_DestinationLatitude", "\"DestinationLatitude\" BETWEEN -90 AND 90");
+                table.HasCheckConstraint("CK_fare_quotes_DestinationLongitude", "\"DestinationLongitude\" BETWEEN -180 AND 180");
+            });
+            entity.HasKey(quote => quote.Id);
+            entity.Property(quote => quote.PricingVersion).HasMaxLength(64).IsRequired();
+            entity.Property(quote => quote.Currency).HasMaxLength(3).IsRequired();
+            entity.Property(quote => quote.DemandMultiplier).HasPrecision(4, 2);
+            entity.HasOne<UserAccount>()
+                .WithMany()
+                .HasForeignKey(quote => quote.PassengerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasMany(quote => quote.Options)
+                .WithOne()
+                .HasForeignKey(option => option.FareQuoteId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.Navigation(quote => quote.Options).UsePropertyAccessMode(PropertyAccessMode.Field);
+            entity.HasIndex(quote => new { quote.PassengerUserId, quote.CreatedAt });
+            entity.HasIndex(quote => quote.ExpiresAt);
+        });
+
+        modelBuilder.Entity<FareQuoteOption>(entity =>
+        {
+            entity.ToTable("fare_quote_options", table =>
+            {
+                table.HasCheckConstraint("CK_fare_quote_options_Total", "\"Total\" > 0");
+                table.HasCheckConstraint("CK_fare_quote_options_Amounts", "\"DistanceCharge\" >= 0 AND \"MinimumFareAdjustment\" >= 0 AND \"BookingFee\" >= 0 AND \"DemandAdjustment\" >= 0 AND \"EstimatedTolls\" >= 0 AND \"WaitingFee\" >= 0 AND \"Discount\" >= 0");
+            });
+            entity.HasKey(option => new { option.FareQuoteId, option.Category });
+            entity.Property(option => option.Category).HasConversion<string>().HasMaxLength(24);
+            entity.Property(option => option.RatePerKilometre).HasPrecision(12, 2);
+            entity.Property(option => option.MinimumFare).HasPrecision(12, 2);
+            entity.Property(option => option.DistanceCharge).HasPrecision(12, 2);
+            entity.Property(option => option.MinimumFareAdjustment).HasPrecision(12, 2);
+            entity.Property(option => option.BookingFee).HasPrecision(12, 2);
+            entity.Property(option => option.DemandAdjustment).HasPrecision(12, 2);
+            entity.Property(option => option.EstimatedTolls).HasPrecision(12, 2);
+            entity.Property(option => option.WaitingFee).HasPrecision(12, 2);
+            entity.Property(option => option.Discount).HasPrecision(12, 2);
+            entity.Property(option => option.Total).HasPrecision(12, 2);
         });
 
         modelBuilder.Entity<DriverAvailability>(entity =>

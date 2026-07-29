@@ -1,72 +1,65 @@
-import { Image } from 'expo-image';
-import type { ColorValue, ImageStyle, StyleProp } from 'react-native';
-import { Text } from 'react-native';
+import Feather from '@expo/vector-icons/Feather';
+import type { ComponentProps } from 'react';
+import type { ColorValue, StyleProp, TextStyle } from 'react-native';
 
 import { colors } from './tokens';
 
 export type RydoIconName =
   | 'bookmark'
+  | 'camera'
   | 'car'
+  | 'card'
+  | 'check'
   | 'chevron-right'
   | 'clock'
   | 'empty'
   | 'error'
+  | 'help'
   | 'home'
   | 'location'
+  | 'logout'
   | 'map-pin'
   | 'person'
-  | 'refresh';
+  | 'phone'
+  | 'refresh'
+  | 'settings'
+  | 'shield'
+  | 'star'
+  | 'tag';
 
-const symbols: Record<RydoIconName, string> = {
-  bookmark: 'bookmark.fill',
-  car: 'car.fill',
-  'chevron-right': 'chevron.right',
-  clock: 'clock.fill',
-  empty: 'tray',
-  error: 'exclamationmark.triangle.fill',
-  home: 'house.fill',
-  location: 'location.fill',
-  'map-pin': 'mappin.and.ellipse',
-  person: 'person.crop.circle.fill',
-  refresh: 'arrow.clockwise',
-};
+type FeatherName = ComponentProps<typeof Feather>['name'];
 
-const fallbacks: Record<RydoIconName, string> = {
-  bookmark: '◆',
-  car: '●',
-  'chevron-right': '›',
-  clock: '◷',
-  empty: '□',
-  error: '!',
-  home: '⌂',
-  location: '◎',
-  'map-pin': '●',
-  person: '●',
-  refresh: '↻',
+const featherNames: Record<RydoIconName, FeatherName> = {
+  bookmark: 'bookmark',
+  camera: 'camera',
+  car: 'truck',
+  card: 'credit-card',
+  check: 'check',
+  'chevron-right': 'chevron-right',
+  clock: 'clock',
+  empty: 'inbox',
+  error: 'alert-triangle',
+  help: 'headphones',
+  home: 'home',
+  location: 'navigation',
+  logout: 'log-out',
+  'map-pin': 'map-pin',
+  person: 'user',
+  phone: 'phone',
+  refresh: 'refresh-cw',
+  settings: 'settings',
+  shield: 'shield',
+  star: 'star',
+  tag: 'tag',
 };
 
 export interface RydoIconProps {
   name: RydoIconName;
   size?: number;
   color?: ColorValue;
-  style?: StyleProp<ImageStyle>;
+  style?: StyleProp<TextStyle>;
 }
 
 export function RydoIcon({ name, size = 22, color = colors.blue, style }: RydoIconProps) {
-  if (process.env.EXPO_OS === 'ios') {
-    return (
-      <Image
-        accessibilityIgnoresInvertColors
-        contentFit="contain"
-        source={`sf:${symbols[name]}`}
-        style={[{ width: size, height: size, tintColor: color }, style]}
-      />
-    );
-  }
-
-  return (
-    <Text aria-hidden style={{ color, fontSize: size, fontWeight: '800', lineHeight: size }}>
-      {fallbacks[name]}
-    </Text>
-  );
+  return <Feather accessibilityElementsHidden color={color as string} name={featherNames[name]} size={size} style={style} />;
 }

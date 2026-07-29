@@ -80,6 +80,44 @@ export type TripStatus =
   | 'Completed'
   | 'Cancelled';
 
+export type RideCategory = 'Solo' | 'Group' | 'GroupPlus';
+
+export interface FareBreakdown {
+  distanceCharge: number;
+  minimumFareAdjustment: number;
+  bookingFee: number;
+  demandAdjustment: number;
+  estimatedTolls: number;
+  waitingFee: number;
+  discount: number;
+}
+
+export interface FareOption {
+  category: RideCategory;
+  ratePerKilometre: number;
+  minimumFare: number;
+  total: number;
+  breakdown: FareBreakdown;
+}
+
+export interface FareQuote {
+  id: string;
+  pricingVersion: string;
+  currency: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  demandMultiplier: number;
+  createdAt: string;
+  expiresAt: string;
+  options: FareOption[];
+  encodedPolyline: string;
+}
+
+export interface CreateFareQuoteRequest {
+  pickup: import('./maps').GeoCoordinate;
+  destination: import('./maps').GeoCoordinate;
+}
+
 export interface Trip {
   id: string;
   passengerUserId: string;
@@ -100,6 +138,11 @@ export interface Trip {
   cancelledAt: string | null;
   cancelledByUserId: string | null;
   cancellationReason: string | null;
+  fareQuoteId: string | null;
+  rideCategory: RideCategory | null;
+  estimatedFareAmount: number | null;
+  fareCurrency: string | null;
+  pricingVersion: string | null;
   finalFareAmount: number | null;
   version: number;
 }
@@ -111,6 +154,8 @@ export interface RequestTripRequest {
   destinationAddress: string;
   destinationLatitude: number;
   destinationLongitude: number;
+  fareQuoteId: string;
+  rideCategory: RideCategory;
 }
 
 export interface TripMatchingResult {

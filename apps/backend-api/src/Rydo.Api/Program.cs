@@ -8,6 +8,7 @@ using Rydo.Api.Authentication;
 using Rydo.Api.Health;
 using Rydo.Api.Hubs;
 using Rydo.Api.Options;
+using Rydo.Application.Maps;
 using Rydo.Application.Realtime;
 using Rydo.Infrastructure;
 using Rydo.Infrastructure.Admin;
@@ -128,6 +129,18 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 AutoReplenishment = true,
             }));
+    options.AddPolicy("pricing", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.User.FindFirst("sub")?.Value
+                ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                QueueLimit = 0,
+                Window = TimeSpan.FromMinutes(1),
+                AutoReplenishment = true,
+            }));
     options.AddPolicy("driver-location", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -201,6 +214,29 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = registration => registration.Tags.Contains("ready"),
 });
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/health/maps", async (IMapService maps, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var predictions = await maps.AutocompleteAsync(
+                    "Johannesburg",
+                    Guid.NewGuid().ToString("N"),
+                    null,
+                    cancellationToken);
+                return Results.Ok(new { status = "Healthy", predictions = predictions.Count });
+            }
+            catch (MapProviderUnavailableException exception)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status503ServiceUnavailable,
+                    title: "Map provider unavailable",
+                    detail: exception.Message);
+            }
+        })
+        .RequireRateLimiting("maps");
+}
 app.MapControllers();
 app.MapHub<OperationsHub>(HubRoutes.Operations)
     .RequireAuthorization()

@@ -8,6 +8,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.2"
+  },
   "scripts": {},
   "peerDependencies": {
     "@gorhom/bottom-sheet": "^5.2.14",
