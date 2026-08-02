@@ -85,7 +85,6 @@ public sealed class SignalRTests
             client,
             "211",
             5211);
-        await PaymentTestClient.FinalizeFareAsync(factory, scenario.Trip.Id, 87.50m);
         AuthenticationTestClient.UseBearerToken(client, scenario.Passenger.AccessToken);
         var payment = await PaymentTestClient.CreateAsync(client, scenario.Trip.Id, "Cash");
         var disputeResponse = await DisputeTestClient.OpenAsync(client, scenario.Trip.Id);

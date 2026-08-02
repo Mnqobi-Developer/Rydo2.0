@@ -8,6 +8,7 @@ export interface RideMapHandle {
 
 interface RideMapProps {
   currentLocation: GeoCoordinate | null;
+  driverLocation: GeoCoordinate | null;
   pickup: GeoCoordinate | null;
   destination: GeoCoordinate | null;
   route: GeoCoordinate[];

@@ -5,52 +5,64 @@ import type { ColorValue, StyleProp, TextStyle } from 'react-native';
 import { colors } from './tokens';
 
 export type RydoIconName =
+  | 'bell'
   | 'bookmark'
   | 'camera'
   | 'car'
   | 'card'
   | 'check'
+  | 'chevron-left'
   | 'chevron-right'
   | 'clock'
   | 'empty'
   | 'error'
   | 'help'
   | 'home'
+  | 'earnings'
+  | 'menu'
   | 'location'
   | 'logout'
   | 'map-pin'
   | 'person'
   | 'phone'
+  | 'power'
   | 'refresh'
   | 'settings'
   | 'shield'
   | 'star'
-  | 'tag';
+  | 'tag'
+  | 'upload';
 
 type FeatherName = ComponentProps<typeof Feather>['name'];
 
 const featherNames: Record<RydoIconName, FeatherName> = {
+  bell: 'bell',
   bookmark: 'bookmark',
   camera: 'camera',
   car: 'truck',
   card: 'credit-card',
   check: 'check',
+  'chevron-left': 'chevron-left',
   'chevron-right': 'chevron-right',
   clock: 'clock',
   empty: 'inbox',
   error: 'alert-triangle',
   help: 'headphones',
   home: 'home',
+  earnings: 'bar-chart-2',
+  menu: 'menu',
   location: 'navigation',
   logout: 'log-out',
   'map-pin': 'map-pin',
   person: 'user',
   phone: 'phone',
+  power: 'power',
   refresh: 'refresh-cw',
   settings: 'settings',
   shield: 'shield',
   star: 'star',
   tag: 'tag',
+  upload: 'upload',
 };
 
 export interface RydoIconProps {

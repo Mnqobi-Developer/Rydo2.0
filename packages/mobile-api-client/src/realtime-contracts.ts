@@ -50,6 +50,9 @@ export interface TripOfferRealtimeResult {
   destinationLatitude: number;
   destinationLongitude: number;
   pickupDistanceKilometres: number;
+  rideCategory: import('./contracts').RideCategory | null;
+  estimatedFareAmount: number | null;
+  fareCurrency: string | null;
   status: 'Pending' | 'Accepted' | 'Declined' | 'Expired';
   offeredAt: string;
   expiresAt: string;

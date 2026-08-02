@@ -2,7 +2,7 @@ import { isApiError, type OtpRequestResult } from '@rydo/mobile-api-client';
 import { RydoIcon, colors, spacing, typography } from '@rydo/mobile-design-system';
 import { useMutation } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -26,18 +26,27 @@ export function PassengerSignInScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [code, setCode] = useState('');
   const [challenge, setChallenge] = useState<OtpRequestResult | null>(null);
+  const [resendSeconds, setResendSeconds] = useState(0);
 
   const requestOtp = useMutation({
     mutationFn: (phone: string) => apiClient.auth.requestOtp({ phoneNumber: phone, role: 'Passenger' }),
     onSuccess: (result) => {
       setChallenge(result);
       setStep('code');
+      setCode('');
+      setResendSeconds(30);
     },
   });
 
   const verifyOtp = useMutation({
     mutationFn: () => apiClient.auth.verifyOtp({ challengeId: challenge!.challengeId, code: code.trim() }),
   });
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return;
+    const timer = setTimeout(() => setResendSeconds((value) => value - 1), 1_000);
+    return () => clearTimeout(timer);
+  }, [resendSeconds]);
 
   const activeError = requestOtp.error ?? verifyOtp.error;
   const errorMessage = activeError
@@ -54,7 +63,7 @@ export function PassengerSignInScreen() {
   }
 
   const isPending = requestOtp.isPending || verifyOtp.isPending;
-  const isDisabled = step === 'phone' ? !normalizeSouthAfricanPhone(phoneNumber) : code.length < 4;
+  const isDisabled = step === 'phone' ? !normalizeSouthAfricanPhone(phoneNumber) : code.length !== 6;
 
   return (
     <KeyboardAwareScrollView
@@ -79,7 +88,7 @@ export function PassengerSignInScreen() {
         <Animated.View key={step} entering={FadeInRight.duration(220)} style={styles.formArea}>
           <View style={styles.headingBlock}>
             <Text selectable style={[styles.heading, compact && styles.headingCompact]}>
-              {step === 'phone' ? 'Let’s get you moving' : 'Check your phone'}
+              {step === 'phone' ? 'Let’s get you moving' : 'Enter your code'}
             </Text>
             <Text selectable style={styles.subtitle}>
               {step === 'phone'
@@ -121,16 +130,32 @@ export function PassengerSignInScreen() {
           ) : (
             <View style={styles.fieldGroup}>
               <View style={styles.codeField}>
+                <View pointerEvents="none" style={styles.codeBoxes}>
+                  {Array.from({ length: 6 }, (_, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.codeBox,
+                        index === code.length && code.length < 6 && styles.codeBoxActive,
+                        code[index] && styles.codeBoxFilled,
+                      ]}
+                    >
+                      <Text style={styles.codeDigit}>{code[index] ?? ''}</Text>
+                    </View>
+                  ))}
+                </View>
                 <TextInput
                   autoFocus
                   accessibilityLabel="One-time code"
                   autoComplete="sms-otp"
+                  caretHidden
                   keyboardType="number-pad"
                   maxLength={6}
-                  onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))}
-                  onSubmitEditing={() => code.length >= 4 && verifyOtp.mutate()}
-                  placeholder="000000"
-                  placeholderTextColor="#A2ACBA"
+                  onChangeText={(value) => {
+                    setCode(value.replace(/\D/g, '').slice(0, 6));
+                    verifyOtp.reset();
+                  }}
+                  onSubmitEditing={() => code.length === 6 && verifyOtp.mutate()}
                   returnKeyType="done"
                   selectionColor={colors.blue}
                   style={styles.codeInput}
@@ -144,6 +169,22 @@ export function PassengerSignInScreen() {
                   Development code: {challenge.developmentCode}
                 </Text>
               ) : null}
+              <Pressable
+                accessibilityRole="button"
+                disabled={resendSeconds > 0 || requestOtp.isPending}
+                onPress={() => {
+                  const normalized = normalizeSouthAfricanPhone(phoneNumber);
+                  if (normalized) {
+                    verifyOtp.reset();
+                    requestOtp.mutate(normalized);
+                  }
+                }}
+                style={styles.resendButton}
+              >
+                <Text style={[styles.resendText, resendSeconds > 0 && styles.resendTextDisabled]}>
+                  {resendSeconds > 0 ? `Resend code in ${resendSeconds}s` : 'Resend code'}
+                </Text>
+              </Pressable>
             </View>
           )}
 
@@ -182,6 +223,7 @@ export function PassengerSignInScreen() {
                 setStep('phone');
                 setCode('');
                 setChallenge(null);
+                setResendSeconds(0);
                 verifyOtp.reset();
               }}
               style={styles.changeNumberButton}
@@ -275,25 +317,36 @@ const styles = StyleSheet.create({
   divider: { width: 1, height: 28, marginHorizontal: spacing.md, backgroundColor: colors.border },
   phoneInput: { minWidth: 0, flex: 1, paddingVertical: spacing.lg, color: colors.navy, fontSize: 17 },
   codeField: {
-    minHeight: 76,
+    minHeight: 68,
     justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
+    position: 'relative',
+  },
+  codeBoxes: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+  codeBox: {
+    minWidth: 0,
+    height: 58,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 20,
+    borderRadius: 15,
     backgroundColor: colors.white,
-    boxShadow: '0 8px 24px rgba(11,31,58,0.07)',
   },
+  codeBoxActive: { borderWidth: 2, borderColor: colors.blue },
+  codeBoxFilled: { borderColor: colors.blue, backgroundColor: colors.blueMuted },
+  codeDigit: { color: colors.navy, fontSize: 24, fontWeight: '900' },
   codeInput: {
-    paddingVertical: spacing.md,
-    color: colors.navy,
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: 10,
-    textAlign: 'center',
+    position: 'absolute',
+    inset: 0,
+    color: 'transparent',
+    opacity: 0.02,
   },
   errorText: { color: colors.danger, fontSize: typography.size.caption, lineHeight: typography.lineHeight.caption },
   developmentCode: { color: colors.amber, fontSize: typography.size.caption, fontWeight: '700', textAlign: 'center' },
+  resendButton: { alignSelf: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  resendText: { color: colors.blue, fontSize: typography.size.caption, fontWeight: '800' },
+  resendTextDisabled: { color: colors.textMuted },
   continueButton: {
     minHeight: 62,
     flexDirection: 'row',
@@ -301,7 +354,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 16,
     backgroundColor: colors.blue,
-    boxShadow: '0 10px 24px rgba(18,97,216,0.22)',
+    boxShadow: '0 10px 24px rgba(36,87,255,0.22)',
   },
   continueButtonDisabled: { opacity: 0.48 },
   continueButtonPressed: { transform: [{ scale: 0.985 }], backgroundColor: colors.bluePressed },

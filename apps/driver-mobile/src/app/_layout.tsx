@@ -22,16 +22,14 @@ export default function RootLayout() {
             <QueryClientProvider client={queryClient}>
               <AuthSessionProvider>
                 <RealtimeLifecycleProvider>
-                  <StatusBar style="light" />
+                  <StatusBar style="dark" />
                   <Stack
                     screenOptions={{
                       contentStyle: { backgroundColor: colors.surface },
-                      headerStyle: { backgroundColor: colors.navy },
-                      headerTintColor: colors.white,
-                      headerShadowVisible: false,
+                      headerShown: false,
                     }}
                   >
-                    <Stack.Screen name="index" options={{ title: 'RYDO Driver' }} />
+                    <Stack.Screen name="index" />
                   </Stack>
                 </RealtimeLifecycleProvider>
               </AuthSessionProvider>

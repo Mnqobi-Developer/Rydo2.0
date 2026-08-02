@@ -36,6 +36,11 @@ public sealed class AuthenticationApiFactory : WebApplicationFactory<Program>
                 ["AdminAccess:BootstrapEmail"] = "admin@rydo.test",
                 ["AdminAccess:BootstrapPhoneNumber"] = "+27829999999",
                 ["AdminAccess:BootstrapPassword"] = "test-only-admin-password",
+                ["DriverDocumentStorage:Provider"] = "Local",
+                ["DriverDocumentStorage:LocalRoot"] = Path.Combine(
+                    Path.GetTempPath(),
+                    _databaseName,
+                    "driver-documents"),
             }));
         builder.ConfigureServices(services =>
         {

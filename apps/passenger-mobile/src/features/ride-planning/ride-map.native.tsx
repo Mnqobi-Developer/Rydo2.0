@@ -1,4 +1,5 @@
 import type { GeoCoordinate } from '@rydo/mobile-api-client';
+import { colors } from '@rydo/mobile-design-system';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
@@ -9,6 +10,7 @@ export interface RideMapHandle {
 
 interface RideMapProps {
   currentLocation: GeoCoordinate | null;
+  driverLocation: GeoCoordinate | null;
   pickup: GeoCoordinate | null;
   destination: GeoCoordinate | null;
   route: GeoCoordinate[];
@@ -16,7 +18,7 @@ interface RideMapProps {
 }
 
 export const RideMap = forwardRef<RideMapHandle, RideMapProps>(function RideMap(
-  { currentLocation, pickup, destination, route, onMapPress },
+  { currentLocation, driverLocation, pickup, destination, route, onMapPress },
   forwardedRef,
 ) {
   const mapRef = useRef<MapView>(null);
@@ -70,10 +72,13 @@ export const RideMap = forwardRef<RideMapHandle, RideMapProps>(function RideMap(
       showsUserLocation
       showsMyLocationButton={false}
     >
-      {pickup ? <Marker coordinate={pickup} title="Pickup" pinColor="#1261D8" /> : null}
+      {pickup ? <Marker coordinate={pickup} title="Pickup" pinColor={colors.blue} /> : null}
       {destination ? <Marker coordinate={destination} title="Destination" pinColor="#D83A3A" /> : null}
+      {driverLocation ? (
+        <Marker coordinate={driverLocation} title="Your driver" pinColor={colors.navy} />
+      ) : null}
       {route.length > 1 ? (
-        <Polyline coordinates={route} strokeColor="#1261D8" strokeWidth={5} />
+        <Polyline coordinates={route} strokeColor={colors.blue} strokeWidth={5} />
       ) : null}
     </MapView>
   );

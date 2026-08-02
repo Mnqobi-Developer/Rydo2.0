@@ -15,6 +15,7 @@ export interface RideMapHandle {
 
 interface RideMapProps {
   currentLocation: GeoCoordinate | null;
+  driverLocation: GeoCoordinate | null;
   pickup: GeoCoordinate | null;
   destination: GeoCoordinate | null;
   route: GeoCoordinate[];
@@ -44,7 +45,7 @@ function loadGoogleMaps(apiKey: string) {
 }
 
 export const RideMap = forwardRef<RideMapHandle, RideMapProps>(function RideMap(
-  { currentLocation, pickup, destination, route, onMapPress },
+  { currentLocation, driverLocation, pickup, destination, route, onMapPress },
   forwardedRef,
 ) {
   const containerRef = useRef<View>(null);
@@ -54,6 +55,7 @@ export const RideMap = forwardRef<RideMapHandle, RideMapProps>(function RideMap(
   const markerLibraryRef = useRef<google.maps.MarkerLibrary | null>(null);
   const pickupMarkerRef = useRef<google.maps.Marker | null>(null);
   const destinationMarkerRef = useRef<google.maps.Marker | null>(null);
+  const driverMarkerRef = useRef<google.maps.Marker | null>(null);
   const routePolylineRef = useRef<google.maps.Polyline | null>(null);
   const onMapPressRef = useRef(onMapPress);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +130,7 @@ export const RideMap = forwardRef<RideMapHandle, RideMapProps>(function RideMap(
       clickListener?.remove();
       pickupMarkerRef.current?.setMap(null);
       destinationMarkerRef.current?.setMap(null);
+      driverMarkerRef.current?.setMap(null);
       routePolylineRef.current?.setMap(null);
       mapRef.current = null;
     };
@@ -186,6 +189,29 @@ export const RideMap = forwardRef<RideMapHandle, RideMapProps>(function RideMap(
       destinationMarkerRef.current.setMap(map);
     }
   }, [destination, ready]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const marker = markerLibraryRef.current;
+    if (!ready || !map || !marker) return;
+
+    if (!driverLocation) {
+      driverMarkerRef.current?.setMap(null);
+      driverMarkerRef.current = null;
+      return;
+    }
+
+    if (!driverMarkerRef.current) {
+      driverMarkerRef.current = new marker.Marker({
+        map,
+        position: toLatLngLiteral(driverLocation),
+        title: 'Your driver',
+      });
+    } else {
+      driverMarkerRef.current.setPosition(toLatLngLiteral(driverLocation));
+      driverMarkerRef.current.setMap(map);
+    }
+  }, [driverLocation, ready]);
 
   useEffect(() => {
     const map = mapRef.current;

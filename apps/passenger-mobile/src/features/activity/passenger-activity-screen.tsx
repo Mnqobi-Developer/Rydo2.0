@@ -55,7 +55,7 @@ export function PassengerActivityScreen() {
             <Pressable
               accessibilityLabel="About your trips"
               accessibilityRole="button"
-              android_ripple={{ color: 'rgba(18,97,216,0.08)', borderless: true }}
+              android_ripple={{ color: 'rgba(36,87,255,0.08)', borderless: true }}
               onPress={() => Alert.alert(
                 'Your trips',
                 'Past trips include completed and cancelled rides. Upcoming shows rides that are currently being matched or are in progress.',
@@ -113,7 +113,7 @@ function TripHistoryRow({ trip }: { trip: Trip }) {
   return (
     <Pressable
       accessibilityRole="button"
-      android_ripple={{ color: 'rgba(18,97,216,0.05)' }}
+      android_ripple={{ color: 'rgba(36,87,255,0.05)' }}
       onPress={() => router.push('/')}
       style={({ pressed }) => [styles.tripRow, pressed && styles.tripRowPressed]}
     >
@@ -136,7 +136,7 @@ function TripHistoryRow({ trip }: { trip: Trip }) {
       <Pressable
         accessibilityLabel={`Plan another ride to ${trip.destinationAddress}`}
         accessibilityRole="button"
-        android_ripple={{ color: 'rgba(18,97,216,0.10)', borderless: true }}
+        android_ripple={{ color: 'rgba(36,87,255,0.10)', borderless: true }}
         onPress={(event) => {
           event.stopPropagation();
           router.push('/');

@@ -1,19 +1,19 @@
 {
   "expo": {
     "name": "RYDO Driver",
-    "slug": "rydo-driver",
+    "slug": "rydo20-driver",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "rydo-driver",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "za.co.rydo.driver"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0B1F3A",
+        "backgroundColor": "#2457FF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -30,7 +30,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0B1F3A",
+          "backgroundColor": "#2457FF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 120
         }
@@ -40,6 +40,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "appVariant": "production",
+      "router": {},
+      "eas": {
+        "projectId": "2557b222-ca78-4c8d-87d9-5b074c4bad04"
+      }
     }
   }
 }

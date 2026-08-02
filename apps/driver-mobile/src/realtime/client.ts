@@ -19,10 +19,12 @@ export function getRealtimeClient() {
       TripUpdated: (trip) => {
         void queryClient.invalidateQueries({ queryKey: ['trips'] });
         void queryClient.invalidateQueries({ queryKey: ['trip', trip.id] });
+        void queryClient.invalidateQueries({ queryKey: ['driver-performance'] });
       },
       TripOfferUpdated: (offer) => {
         void queryClient.invalidateQueries({ queryKey: ['trip-offers'] });
         void queryClient.invalidateQueries({ queryKey: ['trip-offer', offer.tripId] });
+        void queryClient.invalidateQueries({ queryKey: ['driver-performance'] });
       },
       DriverAvailabilityUpdated: () => {
         void queryClient.invalidateQueries({ queryKey: ['driver-availability'] });

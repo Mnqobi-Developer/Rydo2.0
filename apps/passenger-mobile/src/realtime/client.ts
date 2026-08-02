@@ -20,7 +20,11 @@ export function getRealtimeClient() {
         void queryClient.invalidateQueries({ queryKey: ['trips'] });
         void queryClient.invalidateQueries({ queryKey: ['trip', trip.id] });
       },
-      DriverAvailabilityUpdated: () => {
+      DriverAvailabilityUpdated: (availability) => {
+        queryClient.setQueryData(
+          ['driver-availability', availability.driverUserId],
+          availability,
+        );
         void queryClient.invalidateQueries({ queryKey: ['driver-availability'] });
       },
       PaymentUpdated: (payment) => {

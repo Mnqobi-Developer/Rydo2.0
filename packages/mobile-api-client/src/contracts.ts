@@ -163,3 +163,90 @@ export interface TripMatchingResult {
   offeredDriverCount: number;
   offersExpireAt: string | null;
 }
+
+export interface TripOffer {
+  id: string;
+  tripId: string;
+  driverUserId: string;
+  pickupAddress: string;
+  pickupLatitude: number;
+  pickupLongitude: number;
+  destinationAddress: string;
+  destinationLatitude: number;
+  destinationLongitude: number;
+  pickupDistanceKilometres: number;
+  rideCategory: RideCategory | null;
+  estimatedFareAmount: number | null;
+  fareCurrency: string | null;
+  status: 'Pending' | 'Accepted' | 'Declined' | 'Expired';
+  offeredAt: string;
+  expiresAt: string;
+  respondedAt: string | null;
+  version: number;
+}
+
+export interface DriverAvailability {
+  driverUserId: string;
+  isOnline: boolean;
+  latitude: number;
+  longitude: number;
+  locationUpdatedAt: string | null;
+  updatedAt: string;
+  version: number;
+}
+
+export type PaymentMethod = 'Cash' | 'PayFast';
+export type PaymentStatus = 'AwaitingPayment' | 'Paid' | 'Cancelled' | 'Failed';
+
+export interface Payment {
+  id: string;
+  tripId: string;
+  passengerUserId: string;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  amount: number;
+  currency: string;
+  providerPaymentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  paidAt: string | null;
+  failedAt: string | null;
+  failureReason: string | null;
+  version: number;
+}
+
+export interface PayFastCheckout {
+  processUrl: string;
+  fields: Record<string, string>;
+}
+
+export interface CreatePaymentResult {
+  payment: Payment;
+  payFastCheckout: PayFastCheckout | null;
+}
+
+export interface CreatePaymentRequest {
+  method: PaymentMethod;
+}
+
+export interface Rating {
+  id: string;
+  tripId: string;
+  raterUserId: string;
+  ratedUserId: string;
+  score: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+export interface CreateRatingRequest {
+  score: number;
+  comment: string | null;
+}
+
+export interface RatingSummary {
+  userId: string;
+  averageScore: number | null;
+  ratingCount: number;
+  distribution: Record<number, number>;
+}

@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Rydo.Application.Payments;
 using Rydo.Application.Trips;
 using Rydo.Application.Realtime;
 using Rydo.Domain.Identity;
+using Rydo.Domain.Payments;
 using Rydo.Domain.Pricing;
 using Rydo.Domain.Trips;
 using Rydo.Infrastructure.Persistence;
@@ -181,21 +183,64 @@ public sealed class TripService(
     {
         return TransitionAsync(
             tripId,
-            trip => trip.Complete(driverUserId, timeProvider.GetUtcNow()),
+            trip =>
+            {
+                var completedAt = timeProvider.GetUtcNow();
+                trip.Complete(driverUserId, completedAt);
+                if (trip.FinalFareAmount is null)
+                {
+                    trip.FinalizeFare(
+                        trip.EstimatedFareAmount ?? throw new InvalidOperationException(
+                            "The trip does not have an estimated fare to finalize."),
+                        completedAt);
+                }
+            },
             cancellationToken);
     }
 
-    public Task<TripResult> CancelAsync(
+    public async Task<TripResult> CancelAsync(
         Guid tripId,
         Guid userId,
         UserRole role,
         string? reason,
         CancellationToken cancellationToken)
     {
-        return TransitionAsync(
-            tripId,
-            trip => trip.Cancel(userId, role, reason, timeProvider.GetUtcNow()),
+        var trip = await database.Trips.SingleOrDefaultAsync(
+            item => item.Id == tripId,
+            cancellationToken) ?? throw new TripNotFoundException();
+        var payment = await database.Payments.SingleOrDefaultAsync(
+            item => item.TripId == tripId,
             cancellationToken);
+
+        try
+        {
+            var cancelledAt = timeProvider.GetUtcNow();
+            trip.Cancel(userId, role, reason, cancelledAt);
+            if (payment?.Status == PaymentStatus.AwaitingPayment)
+            {
+                payment.Cancel("Trip cancelled before payment completed.", cancelledAt);
+            }
+            await SaveChangesAsync(cancellationToken);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            throw new TripAccessException(exception.Message);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new TripStateConflictException(exception.Message);
+        }
+
+        var result = ToResult(trip);
+        await realtime.PublishTripUpdatedAsync(result, cancellationToken);
+        if (payment is not null)
+        {
+            await realtime.PublishPaymentUpdatedAsync(
+                ToPaymentResult(payment),
+                trip.DriverUserId,
+                cancellationToken);
+        }
+        return result;
     }
 
     private async Task<TripResult> TransitionAsync(
@@ -273,6 +318,25 @@ public sealed class TripService(
             trip.CancellationReason,
             trip.FinalFareAmount,
             trip.Version));
+    }
+
+    private static PaymentResult ToPaymentResult(Payment payment)
+    {
+        return new PaymentResult(
+            payment.Id,
+            payment.TripId,
+            payment.PassengerUserId,
+            payment.Method,
+            payment.Status,
+            payment.Amount,
+            payment.Currency,
+            payment.ProviderPaymentId,
+            payment.CreatedAt,
+            payment.UpdatedAt,
+            payment.PaidAt,
+            payment.FailedAt,
+            payment.FailureReason,
+            payment.Version);
     }
 
     private static TripResult ToResult(Trip trip)

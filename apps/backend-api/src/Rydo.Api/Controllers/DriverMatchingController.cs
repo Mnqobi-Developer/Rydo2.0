@@ -108,6 +108,21 @@ public sealed class DriverMatchingController(IDriverMatchingService matching) : 
         return Ok(await matching.ListOffersAsync(userId, cancellationToken));
     }
 
+    [HttpGet("performance")]
+    [ProducesResponseType<DriverPerformanceResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<DriverPerformanceResult>> GetPerformance(
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        return Ok(await matching.GetPerformanceAsync(userId, cancellationToken));
+    }
+
     [HttpPost("trip-offers/{tripId:guid}/decline")]
     [ProducesResponseType<TripOfferResult>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

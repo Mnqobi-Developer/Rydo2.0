@@ -126,7 +126,6 @@ public sealed class AdminApiTests
         await using var factory = new AuthenticationApiFactory();
         using var client = factory.CreateClient();
         var scenario = await RatingTestClient.CompleteTripAsync(factory, client, "204", 4204);
-        await PaymentTestClient.FinalizeFareAsync(factory, scenario.Trip.Id, 150m);
         AuthenticationTestClient.UseBearerToken(client, scenario.Passenger.AccessToken);
         var payment = await PaymentTestClient.CreateAsync(client, scenario.Trip.Id, "Cash");
         var onlineDriver = await AuthenticationTestClient.SignInAsync(

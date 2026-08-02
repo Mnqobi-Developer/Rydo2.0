@@ -256,12 +256,14 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
           tokens = await rotateTokens();
         }
         const headers = new Headers({ Accept: 'application/json' });
+        const isMultipartBody =
+          typeof FormData !== 'undefined' && requestOptions.body instanceof FormData;
 
         for (const [name, value] of Object.entries(requestOptions.headers ?? {})) {
           headers.set(name, value);
         }
 
-        if (requestOptions.body !== undefined) {
+        if (requestOptions.body !== undefined && !isMultipartBody) {
           if (!headers.has('Content-Type')) {
             headers.set('Content-Type', 'application/json');
           }
@@ -280,7 +282,9 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
             body:
               requestOptions.body === undefined
                 ? undefined
-                : JSON.stringify(requestOptions.body),
+                : isMultipartBody
+                  ? requestOptions.body as BodyInit
+                  : JSON.stringify(requestOptions.body),
             signal: requestSignal.signal,
           });
         } catch (error) {
