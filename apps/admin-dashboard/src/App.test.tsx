@@ -1,17 +1,17 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
-
+import { beforeEach, describe, expect, it } from 'vitest'
 import App from './App'
 
-describe('Admin dashboard foundation', () => {
-  it('renders the operations shell and planned modules', () => {
+describe('Admin dashboard access', () => {
+  beforeEach(() => sessionStorage.clear())
+
+  it('protects operations behind the admin sign-in screen', () => {
     render(<App />)
 
-    expect(screen.getByRole('heading', { name: 'Operations overview' })).toBeInTheDocument()
-    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument()
-    expect(screen.getByText('Local environment')).toBeInTheDocument()
-    expect(screen.getByText('Users and drivers')).toBeInTheDocument()
-    expect(screen.getByText('Trips and matching')).toBeInTheDocument()
-    expect(screen.getByText('Payments and disputes')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Email address')).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toBeInTheDocument()
+    expect(screen.getByText('Actions are audited', { exact: false })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Primary navigation' })).not.toBeInTheDocument()
   })
 })

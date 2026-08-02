@@ -14,6 +14,10 @@ public sealed record DriverDocumentResult(
     DateTimeOffset? ReviewedAt,
     string? RejectionReason);
 
+public sealed record DriverDocumentContentResult(
+    DriverDocumentResult Document,
+    Stream Content);
+
 public interface IDriverDocumentService
 {
     Task<IReadOnlyList<DriverDocumentResult>?> ListAsync(
@@ -25,17 +29,24 @@ public interface IDriverDocumentService
         Guid documentId,
         CancellationToken cancellationToken);
 
-    Task<DriverDocumentResult?> RegisterAsync(
+    Task<DriverDocumentResult?> UploadAsync(
         Guid userId,
         DriverDocumentType documentType,
         string originalFileName,
         string contentType,
-        long sizeBytes,
-        string sha256,
+        Stream content,
+        CancellationToken cancellationToken);
+
+    Task<DriverDocumentContentResult?> OpenContentAsync(
+        Guid userId,
+        Guid documentId,
         CancellationToken cancellationToken);
 }
 
 public sealed class DriverDocumentConflictException(string message) : Exception(message);
+
+public sealed class DriverDocumentStorageException(string message, Exception? innerException = null)
+    : Exception(message, innerException);
 
 public sealed class DriverOnboardingDocumentsMissingException(
     IReadOnlyList<DriverDocumentType> missingDocumentTypes)

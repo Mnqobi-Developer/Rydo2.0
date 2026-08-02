@@ -3,6 +3,8 @@
 TestResults/
 *.user
 *.log
+.env
+.env.*
 .git/
 .gitignore
 compose.yaml

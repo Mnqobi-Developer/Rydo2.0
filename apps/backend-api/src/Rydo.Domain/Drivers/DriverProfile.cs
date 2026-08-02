@@ -95,6 +95,21 @@ public sealed class DriverProfile
         UpdatedAt = submittedAt;
     }
 
+    public void BeginCorrection(DateTimeOffset updatedAt)
+    {
+        if (OnboardingStatus != DriverOnboardingStatus.Rejected)
+        {
+            throw new InvalidOperationException(
+                "Only a rejected driver profile can begin corrections.");
+        }
+
+        OnboardingStatus = DriverOnboardingStatus.Draft;
+        SubmittedAt = null;
+        ReviewedAt = null;
+        RejectionReason = null;
+        UpdatedAt = updatedAt;
+    }
+
     public void Approve(DateTimeOffset reviewedAt)
     {
         if (OnboardingStatus != DriverOnboardingStatus.PendingReview)

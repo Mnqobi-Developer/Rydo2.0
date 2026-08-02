@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Rydo.Domain.Drivers;
+using Rydo.Infrastructure.Persistence;
 
 namespace Rydo.Api.Tests;
 
@@ -22,16 +26,15 @@ public sealed class DriverDocumentTests
         emptyResponse.EnsureSuccessStatusCode();
         Assert.Empty(await DriverDocumentTestClient.ReadDocumentsAsync(emptyResponse));
 
-        var registerResponse = await client.PostAsJsonAsync(
+        var bytes = DriverDocumentTestClient.CreatePdfBytes('A', 2048);
+        using var upload = DriverDocumentTestClient.CreateUploadForm(
+            "IdentityDocument",
+            "identity-document.pdf",
+            "application/pdf",
+            bytes);
+        var registerResponse = await client.PostAsync(
             "/api/v1/drivers/me/documents",
-            new
-            {
-                documentType = "IdentityDocument",
-                originalFileName = " identity-document.pdf ",
-                contentType = "application/pdf",
-                sizeBytes = 2048,
-                sha256 = new string('a', 64),
-            });
+            upload);
 
         Assert.Equal(HttpStatusCode.Created, registerResponse.StatusCode);
         var responseBody = await registerResponse.Content.ReadAsStringAsync();
@@ -39,12 +42,18 @@ public sealed class DriverDocumentTests
         var registered = await DriverDocumentTestClient.ReadDocumentAsync(registerResponse);
         Assert.Equal(DriverDocumentType.IdentityDocument, registered.DocumentType);
         Assert.Equal("identity-document.pdf", registered.OriginalFileName);
-        Assert.Equal(new string('A', 64), registered.Sha256);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(bytes)), registered.Sha256);
         Assert.Equal(DriverDocumentReviewStatus.PendingReview, registered.ReviewStatus);
 
         var getResponse = await client.GetAsync($"/api/v1/drivers/me/documents/{registered.Id}");
         getResponse.EnsureSuccessStatusCode();
         Assert.Equal(registered, await DriverDocumentTestClient.ReadDocumentAsync(getResponse));
+
+        var contentResponse = await client.GetAsync(
+            $"/api/v1/drivers/me/documents/{registered.Id}/content");
+        contentResponse.EnsureSuccessStatusCode();
+        Assert.Equal("application/pdf", contentResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(bytes, await contentResponse.Content.ReadAsByteArrayAsync());
 
         var listResponse = await client.GetAsync("/api/v1/drivers/me/documents");
         listResponse.EnsureSuccessStatusCode();
@@ -67,18 +76,52 @@ public sealed class DriverDocumentTests
             "DriversLicense",
             "license.pdf");
 
-        var response = await client.PostAsJsonAsync(
-            "/api/v1/drivers/me/documents",
-            new
-            {
-                documentType = "DriversLicense",
-                originalFileName = "replacement.pdf",
-                contentType = "application/pdf",
-                sizeBytes = 1024,
-                sha256 = new string('B', 64),
-            });
+        using var upload = DriverDocumentTestClient.CreateUploadForm(
+            "DriversLicense",
+            "replacement.pdf",
+            "application/pdf",
+            DriverDocumentTestClient.CreatePdfBytes('B', 32));
+        var response = await client.PostAsync("/api/v1/drivers/me/documents", upload);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RejectedDocumentCanBeReplacedWithANewProtectedUpload()
+    {
+        await using var factory = new AuthenticationApiFactory();
+        using var client = factory.CreateClient();
+        var tokens = await AuthenticationTestClient.SignInAsync(
+            client,
+            "+27820000612",
+            "Driver");
+        AuthenticationTestClient.UseBearerToken(client, tokens.AccessToken);
+        await DriverDocumentTestClient.CreateProfileAsync(client);
+        var rejected = await DriverDocumentTestClient.RegisterAsync(
+            client,
+            "DriversLicense",
+            "old-license.pdf");
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<RydoDbContext>();
+            var entity = await database.DriverDocuments.SingleAsync(item => item.Id == rejected.Id);
+            entity.Reject("The licence image is unreadable.", factory.Clock.GetUtcNow());
+            await database.SaveChangesAsync();
+        }
+
+        var replacement = await DriverDocumentTestClient.RegisterAsync(
+            client,
+            "DriversLicense",
+            "new-license.pdf",
+            'Z');
+        var listResponse = await client.GetAsync("/api/v1/drivers/me/documents");
+        listResponse.EnsureSuccessStatusCode();
+        var current = await DriverDocumentTestClient.ReadDocumentsAsync(listResponse);
+
+        Assert.NotEqual(rejected.Id, replacement.Id);
+        Assert.Equal(DriverDocumentReviewStatus.PendingReview, replacement.ReviewStatus);
+        Assert.Equal([replacement], current);
     }
 
     [Fact]
@@ -99,16 +142,12 @@ public sealed class DriverDocumentTests
             null);
         submitResponse.EnsureSuccessStatusCode();
 
-        var response = await client.PostAsJsonAsync(
-            "/api/v1/drivers/me/documents",
-            new
-            {
-                documentType = "ProofOfAddress",
-                originalFileName = "proof-of-address.pdf",
-                contentType = "application/pdf",
-                sizeBytes = 1024,
-                sha256 = new string('D', 64),
-            });
+        using var upload = DriverDocumentTestClient.CreateUploadForm(
+            "IdentityDocument",
+            "replacement.pdf",
+            "application/pdf",
+            DriverDocumentTestClient.CreatePdfBytes('B', 32));
+        var response = await client.PostAsync("/api/v1/drivers/me/documents", upload);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -124,9 +163,12 @@ public sealed class DriverDocumentTests
             "Driver");
         AuthenticationTestClient.UseBearerToken(client, tokens.AccessToken);
 
-        var response = await client.PostAsJsonAsync(
-            "/api/v1/drivers/me/documents",
-            ValidDocumentRequest());
+        using var upload = DriverDocumentTestClient.CreateUploadForm(
+            "IdentityDocument",
+            "identity.pdf",
+            "application/pdf",
+            DriverDocumentTestClient.CreatePdfBytes('A', 16));
+        var response = await client.PostAsync("/api/v1/drivers/me/documents", upload);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -154,8 +196,11 @@ public sealed class DriverDocumentTests
         AuthenticationTestClient.UseBearerToken(client, otherTokens.AccessToken);
 
         var response = await client.GetAsync($"/api/v1/drivers/me/documents/{document.Id}");
+        var contentResponse = await client.GetAsync(
+            $"/api/v1/drivers/me/documents/{document.Id}/content");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, contentResponse.StatusCode);
     }
 
     [Fact]
@@ -170,60 +215,44 @@ public sealed class DriverDocumentTests
         AuthenticationTestClient.UseBearerToken(client, tokens.AccessToken);
 
         var listResponse = await client.GetAsync("/api/v1/drivers/me/documents");
-        var registerResponse = await client.PostAsJsonAsync(
-            "/api/v1/drivers/me/documents",
-            ValidDocumentRequest());
+        using var upload = DriverDocumentTestClient.CreateUploadForm(
+            "IdentityDocument",
+            "identity.pdf",
+            "application/pdf",
+            DriverDocumentTestClient.CreatePdfBytes('A', 16));
+        var registerResponse = await client.PostAsync("/api/v1/drivers/me/documents", upload);
 
         Assert.Equal(HttpStatusCode.Forbidden, listResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, registerResponse.StatusCode);
     }
 
     [Theory]
-    [InlineData("IdentityDocument", "../identity.pdf", "application/pdf", 1024, 64)]
-    [InlineData("IdentityDocument", "identity.exe", "application/octet-stream", 1024, 64)]
-    [InlineData("IdentityDocument", "identity.pdf", "application/pdf", 0, 64)]
-    [InlineData("IdentityDocument", "identity.pdf", "application/pdf", 10485761, 64)]
-    [InlineData("IdentityDocument", "identity.pdf", "application/pdf", 1024, 63)]
-    [InlineData("Unknown", "identity.pdf", "application/pdf", 1024, 64)]
-    public async Task InvalidDocumentMetadataIsRejected(
+    [InlineData("IdentityDocument", "identity.exe", "application/octet-stream", 1)]
+    [InlineData("IdentityDocument", "identity.pdf", "application/pdf", 0)]
+    [InlineData("Unknown", "identity.pdf", "application/pdf", 1)]
+    public async Task InvalidDocumentUploadIsRejected(
         string documentType,
         string originalFileName,
         string contentType,
-        long sizeBytes,
-        int hashLength)
+        int sizeBytes)
     {
         await using var factory = new AuthenticationApiFactory();
         using var client = factory.CreateClient();
         var tokens = await AuthenticationTestClient.SignInAsync(
             client,
-            $"+2782000070{hashLength % 10}",
+            $"+2782000070{sizeBytes % 10}",
             "Driver");
         AuthenticationTestClient.UseBearerToken(client, tokens.AccessToken);
         await DriverDocumentTestClient.CreateProfileAsync(client);
 
-        var response = await client.PostAsJsonAsync(
-            "/api/v1/drivers/me/documents",
-            new
-            {
-                documentType,
-                originalFileName,
-                contentType,
-                sizeBytes,
-                sha256 = new string('A', hashLength),
-            });
+        using var upload = DriverDocumentTestClient.CreateUploadForm(
+            documentType,
+            originalFileName,
+            contentType,
+            new byte[sizeBytes]);
+        var response = await client.PostAsync("/api/v1/drivers/me/documents", upload);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    private static object ValidDocumentRequest()
-    {
-        return new
-        {
-            documentType = "IdentityDocument",
-            originalFileName = "identity.pdf",
-            contentType = "application/pdf",
-            sizeBytes = 1024,
-            sha256 = new string('A', 64),
-        };
-    }
 }

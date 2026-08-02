@@ -17,10 +17,29 @@ Infrastructure depends on Application and Domain; Domain remains independent.
 
 ## Local development
 
-Start PostgreSQL with PostGIS:
+Configure the Docker API once from the repository root. The script prompts for
+the Supabase password and reuses `GoogleMaps:ServerApiKey` from .NET user-secrets
+when available:
 
 ```powershell
-docker compose -f apps/backend-api/compose.yaml up -d
+& .\apps\backend-api\scripts\configure-docker-local.ps1
+docker compose -f apps/backend-api/compose.yaml up -d --build
+```
+
+The container restarts automatically with Docker Desktop and publishes the API
+at `http://localhost:5190` (and at the computer's LAN address for physical
+phones). Enable **Start Docker Desktop when you sign in** in Docker Desktop's
+general settings so it starts after Windows sign-in.
+
+The generated `apps/backend-api/.env.docker.local` contains credentials. It is
+ignored by Git, excluded from the Docker build context, and must never be shared
+or committed. The setup script also supplies a machine-local trusted root to the
+build when security software intercepts HTTPS traffic; production builds do not
+receive this local certificate. To use the optional local PostGIS database
+instead of Supabase, start its profile explicitly:
+
+```powershell
+docker compose -f apps/backend-api/compose.yaml --profile local-database up -d database
 ```
 
 Run the API from the repository root:
@@ -74,9 +93,11 @@ the extension rather than RYDO.
 - `POST /api/v1/drivers/me/onboarding/submit` — submit a completed Driver profile for review.
 - `GET /api/v1/drivers/me/documents` — list the signed-in Driver's current document metadata.
 - `GET /api/v1/drivers/me/documents/{documentId}` — return owned document metadata.
-- `POST /api/v1/drivers/me/documents` — register metadata for a protected Driver document.
+- `POST /api/v1/drivers/me/documents` — upload a protected PDF, JPEG, or PNG Driver document as multipart form data (`documentType` and `file`, maximum 10 MB). The API computes the SHA-256 digest and stores only protected object metadata in PostgreSQL.
+- `GET /api/v1/drivers/me/documents/{documentId}/content` — download an owned document through the authenticated API boundary.
 - `GET /api/v1/drivers/me/vehicle` — return the signed-in Driver's current vehicle.
 - `PUT /api/v1/drivers/me/vehicle` — create or update editable vehicle information.
+- `POST /api/v1/pricing/quotes` — calculate and persist a short-lived, itemised fare quote for every ride category.
 - `POST /api/v1/trips` — request a trip as the signed-in Passenger.
 - `GET /api/v1/trips/me` — list trips belonging to the signed-in Passenger or Driver.
 - `GET /api/v1/trips/{tripId}` — return a trip visible to the signed-in participant.
@@ -228,6 +249,23 @@ ITNs to localhost. Before a callback changes payment state, the API checks its
 signature, merchant, source IP range, exact ZAR amount, provider transaction ID,
 and PayFast server confirmation. Callback payloads are represented only by a
 SHA-256 hash in the audit table rather than being stored with customer data.
+
+## Production pricing
+
+Pricing is calculated only by the backend. A quote contains Solo, Group, and
+Group+ options, expires after five minutes, and can be consumed only once by
+the Passenger who requested it. Trip records retain the accepted category,
+estimated fare, currency, and pricing-rule version.
+
+The launch rates are configured under `Pricing` in `appsettings.json`:
+
+- Solo: R8.50/km, R25 minimum.
+- Group: R13/km, R35 minimum.
+- Group+: R18/km, R50 minimum.
+
+Booking fees and the capped demand multiplier are configuration values rather
+than mobile constants. Their launch values are zero and `1.0x`. See
+[`docs/pricing.md`](../../docs/pricing.md) for the calculation and lifecycle.
 
 ## Phone authentication
 

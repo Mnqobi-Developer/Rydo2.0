@@ -1,6 +1,26 @@
 services:
+  api:
+    container_name: rydo-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+      secrets:
+        - local_ca
+    env_file:
+      - path: ./.env.docker.local
+        format: raw
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8080
+    ports:
+      - "5190:8080"
+    volumes:
+      - rydo-driver-documents:/app/data/driver-documents
+    restart: unless-stopped
+
   database:
     image: postgis/postgis:17-3.5-alpine
+    profiles: ["local-database"]
     environment:
       POSTGRES_DB: rydo
       POSTGRES_USER: rydo
@@ -14,6 +34,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
 volumes:
   rydo-postgres-data:
+  rydo-driver-documents:
+
+secrets:
+  local_ca:
+    file: ./.env.docker.local.ca.crt
