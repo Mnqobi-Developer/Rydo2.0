@@ -49,6 +49,14 @@ module.exports = ({ config }) => {
           'RYDO uses your location to choose a pickup point and show nearby ride options.',
       },
     ],
+    [
+      'expo-build-properties',
+      {
+        android: {
+          usesCleartextTraffic: variant === 'development',
+        },
+      },
+    ],
   ];
   const androidMapsKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY;
   const iosMapsKey = process.env.GOOGLE_MAPS_IOS_API_KEY;
@@ -70,7 +78,6 @@ module.exports = ({ config }) => {
       ...config.android,
       package: `za.co.rydo.passenger${settings.identifierSuffix}`,
       softwareKeyboardLayoutMode: 'resize',
-      usesCleartextTraffic: variant === 'development',
       config: {
         ...config.android?.config,
         ...(androidMapsKey ? { googleMaps: { apiKey: androidMapsKey } } : {}),
