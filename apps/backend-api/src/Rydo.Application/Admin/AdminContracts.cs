@@ -74,6 +74,8 @@ public interface IAdminOperationsService
     Task<PagedResult<AdminUserResult>> ListUsersAsync(UserRole? role, int page, int pageSize, CancellationToken cancellationToken);
     Task<PagedResult<AdminDriverResult>> ListDriversAsync(DriverOnboardingStatus? status, int page, int pageSize, CancellationToken cancellationToken);
     Task<AdminDriverResult?> GetDriverAsync(Guid driverUserId, CancellationToken cancellationToken);
+    Task<DriverDocumentContentResult?> OpenDriverDocumentAsync(Guid driverUserId, Guid documentId, CancellationToken cancellationToken);
+    Task<AdminDriverResult> ReviewDriverDocumentAsync(Guid adminUserId, Guid driverUserId, Guid documentId, bool approve, string? reason, CancellationToken cancellationToken);
     Task<AdminDriverResult> ReviewDriverAsync(Guid adminUserId, Guid driverUserId, bool approve, string? reason, CancellationToken cancellationToken);
     Task<PagedResult<TripResult>> ListTripsAsync(TripStatus? status, int page, int pageSize, CancellationToken cancellationToken);
     Task<PagedResult<PaymentResult>> ListPaymentsAsync(PaymentStatus? status, int page, int pageSize, CancellationToken cancellationToken);

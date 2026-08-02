@@ -59,6 +59,28 @@ public static class DependencyInjection
         services.AddScoped<IAdminAuthenticationService, AdminAuthenticationService>();
         services.AddScoped<IAdminOperationsService, AdminOperationsService>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
+        services.AddOptions<DriverDocumentStorageOptions>()
+            .Bind(configuration.GetSection(DriverDocumentStorageOptions.SectionName))
+            .Validate(options =>
+                options.Provider.Equals("Local", StringComparison.OrdinalIgnoreCase)
+                    ? !string.IsNullOrWhiteSpace(options.LocalRoot)
+                    : options.Provider.Equals("Supabase", StringComparison.OrdinalIgnoreCase) &&
+                        Uri.TryCreate(options.SupabaseUrl, UriKind.Absolute, out var uri) &&
+                        uri.Scheme == Uri.UriSchemeHttps &&
+                        !string.IsNullOrWhiteSpace(options.SupabaseServiceRoleKey) &&
+                        !string.IsNullOrWhiteSpace(options.SupabaseBucket),
+                "Driver document storage must be a configured Local or Supabase provider.")
+            .ValidateOnStart();
+        services.AddSingleton<DriverDocumentStorageHttpClient>();
+        services.AddScoped<IDriverDocumentObjectStorage>(provider =>
+        {
+            var options = provider
+                .GetRequiredService<Microsoft.Extensions.Options.IOptions<DriverDocumentStorageOptions>>()
+                .Value;
+            return options.Provider.Equals("Supabase", StringComparison.OrdinalIgnoreCase)
+                ? ActivatorUtilities.CreateInstance<SupabaseDriverDocumentObjectStorage>(provider)
+                : ActivatorUtilities.CreateInstance<LocalDriverDocumentObjectStorage>(provider);
+        });
         services.AddScoped<IDriverDocumentService, DriverDocumentService>();
         services.AddScoped<IDriverProfileService, DriverProfileService>();
         services.AddScoped<IDriverVehicleService, DriverVehicleService>();

@@ -10,10 +10,18 @@ public sealed class DatabaseHealthCheck(RydoDbContext database) : IHealthCheck
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
-        var canConnect = await database.Database.CanConnectAsync(cancellationToken);
+        try
+        {
+            await database.Database.OpenConnectionAsync(cancellationToken);
+            await database.Database.CloseConnectionAsync();
 
-        return canConnect
-            ? HealthCheckResult.Healthy("PostgreSQL is reachable.")
-            : HealthCheckResult.Unhealthy("PostgreSQL is not reachable.");
+            return HealthCheckResult.Healthy("PostgreSQL is reachable.");
+        }
+        catch (Exception exception)
+        {
+            return HealthCheckResult.Unhealthy(
+                "PostgreSQL is not reachable.",
+                exception);
+        }
     }
 }

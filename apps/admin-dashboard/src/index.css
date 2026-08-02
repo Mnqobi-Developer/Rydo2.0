@@ -1,9 +1,9 @@
 :root {
-  --color-blue: #1261d8;
-  --color-blue-bright: #2c80ff;
-  --color-blue-muted: #eaf2ff;
-  --color-navy: #0b1f3a;
-  --color-surface: #f4f7fb;
+  --color-blue: #2457ff;
+  --color-blue-bright: #3d6cff;
+  --color-blue-muted: #edf2ff;
+  --color-navy: #07172f;
+  --color-surface: #f7f9fc;
   --color-white: #ffffff;
   --color-text-muted: #5d6b7e;
   --color-text-soft: #8793a3;
@@ -40,7 +40,9 @@ select {
 }
 
 button:focus-visible,
-a:focus-visible {
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
   outline: 3px solid rgb(18 97 216 / 28%);
   outline-offset: 2px;
 }

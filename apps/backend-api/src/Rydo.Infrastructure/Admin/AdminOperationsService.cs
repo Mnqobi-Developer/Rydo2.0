@@ -18,7 +18,8 @@ namespace Rydo.Infrastructure.Admin;
 public sealed class AdminOperationsService(
     RydoDbContext database,
     TimeProvider timeProvider,
-    IRealtimeEventPublisher realtime) : IAdminOperationsService
+    IRealtimeEventPublisher realtime,
+    Rydo.Infrastructure.Drivers.IDriverDocumentObjectStorage documentStorage) : IAdminOperationsService
 {
     private static readonly DriverDocumentType[] RequiredDocumentTypes =
     [
@@ -205,6 +206,124 @@ public sealed class AdminOperationsService(
             .SingleOrDefaultAsync(cancellationToken);
 
         return new AdminDriverResult(profile, documents, vehicle);
+    }
+
+    public async Task<DriverDocumentContentResult?> OpenDriverDocumentAsync(
+        Guid driverUserId,
+        Guid documentId,
+        CancellationToken cancellationToken)
+    {
+        var document = await database.DriverDocuments.AsNoTracking()
+            .SingleOrDefaultAsync(item =>
+                item.Id == documentId &&
+                item.DriverUserId == driverUserId &&
+                item.SupersededAt == null,
+                cancellationToken);
+        if (document is null) return null;
+
+        try
+        {
+            var content = await documentStorage.OpenReadAsync(
+                document.StorageObjectKey,
+                cancellationToken);
+            return new DriverDocumentContentResult(
+                new DriverDocumentResult(
+                    document.Id,
+                    document.DocumentType,
+                    document.OriginalFileName,
+                    document.ContentType,
+                    document.SizeBytes,
+                    document.Sha256,
+                    document.ReviewStatus,
+                    document.UploadedAt,
+                    document.ReviewedAt,
+                    document.RejectionReason),
+                content);
+        }
+        catch (Exception exception) when (exception is IOException or HttpRequestException)
+        {
+            throw new DriverDocumentStorageException(
+                "The protected document is temporarily unavailable.",
+                exception);
+        }
+    }
+
+    public async Task<AdminDriverResult> ReviewDriverDocumentAsync(
+        Guid adminUserId,
+        Guid driverUserId,
+        Guid documentId,
+        bool approve,
+        string? reason,
+        CancellationToken cancellationToken)
+    {
+        await EnsureAdminAsync(adminUserId, cancellationToken);
+        var profile = await database.DriverProfiles.SingleOrDefaultAsync(
+            item => item.UserId == driverUserId,
+            cancellationToken) ?? throw new AdminResourceNotFoundException();
+        var document = await database.DriverDocuments.SingleOrDefaultAsync(
+            item => item.Id == documentId &&
+                item.DriverUserId == driverUserId &&
+                item.SupersededAt == null,
+            cancellationToken) ?? throw new AdminResourceNotFoundException();
+
+        if (profile.OnboardingStatus != DriverOnboardingStatus.PendingReview)
+        {
+            throw new AdminOperationConflictException(
+                "Only documents in a Driver application pending review can be reviewed.");
+        }
+
+        var now = timeProvider.GetUtcNow();
+        try
+        {
+            if (approve)
+            {
+                document.Approve(now);
+            }
+            else
+            {
+                var normalizedReason = NormalizeRequired(
+                    reason,
+                    500,
+                    "A document rejection reason is required.");
+                document.Reject(normalizedReason, now);
+                profile.Reject($"{document.DocumentType}: {normalizedReason}", now);
+            }
+        }
+        catch (ArgumentException exception)
+        {
+            throw new AdminOperationValidationException(exception.Message);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new AdminOperationConflictException(exception.Message);
+        }
+
+        database.AdminAuditLogs.Add(AdminAuditLog.Create(
+            adminUserId,
+            approve ? "driver-document.approved" : "driver-document.rejected",
+            "driver-document",
+            documentId,
+            approve
+                ? $"driver={driverUserId}; decision=Approved"
+                : $"driver={driverUserId}; decision=Rejected; reason={reason!.Trim()}",
+            now));
+        await SaveMutationAsync(cancellationToken);
+        var result = (await GetDriverAsync(driverUserId, cancellationToken))!;
+        await realtime.PublishDriverReviewUpdatedAsync(
+            new DriverReviewChangedResult(
+                driverUserId,
+                result.Profile.OnboardingStatus,
+                result.Profile.RejectionReason,
+                result.Profile.UpdatedAt),
+            cancellationToken);
+        await realtime.PublishAdminOperationsChangedAsync(
+            new AdminOperationsChangedResult(
+                "driver-document",
+                documentId,
+                approve ? "approved" : "rejected",
+                now),
+            cancellationToken);
+        return result;
     }
 
     public async Task<AdminDriverResult> ReviewDriverAsync(

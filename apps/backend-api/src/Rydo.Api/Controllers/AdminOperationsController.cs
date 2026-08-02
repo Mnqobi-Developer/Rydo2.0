@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Rydo.Application.Admin;
+using Rydo.Application.Drivers;
 using Rydo.Application.Payments;
 using Rydo.Application.Trips;
 using Rydo.Domain.Disputes;
@@ -63,6 +64,57 @@ public sealed class AdminOperationsController(
     {
         var driver = await operations.GetDriverAsync(driverUserId, cancellationToken);
         return driver is null ? NotFound() : Ok(driver);
+    }
+
+    [HttpGet("drivers/{driverUserId:guid}/documents/{documentId:guid}/content")]
+    public async Task<IActionResult> DownloadDriverDocument(
+        Guid driverUserId,
+        Guid documentId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await operations.OpenDriverDocumentAsync(
+                driverUserId,
+                documentId,
+                cancellationToken);
+            return result is null
+                ? NotFound()
+                : File(
+                    result.Content,
+                    result.Document.ContentType,
+                    result.Document.OriginalFileName);
+        }
+        catch (DriverDocumentStorageException exception)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Status = StatusCodes.Status503ServiceUnavailable,
+                Title = "Document storage unavailable",
+                Detail = exception.Message,
+            });
+        }
+    }
+
+    [HttpPost("drivers/{driverUserId:guid}/documents/{documentId:guid}/review")]
+    public async Task<ActionResult<AdminDriverResult>> ReviewDriverDocument(
+        Guid driverUserId,
+        Guid documentId,
+        ReviewDriverRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetAdminId(out var adminUserId))
+        {
+            return Unauthorized();
+        }
+
+        return await RunMutationAsync(() => operations.ReviewDriverDocumentAsync(
+            adminUserId,
+            driverUserId,
+            documentId,
+            request.Approve,
+            request.Reason,
+            cancellationToken));
     }
 
     [HttpPost("drivers/{driverUserId:guid}/review")]

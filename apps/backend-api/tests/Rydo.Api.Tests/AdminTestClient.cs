@@ -35,6 +35,18 @@ internal static class AdminTestClient
             new { approve, reason });
     }
 
+    public static Task<HttpResponseMessage> ReviewDriverDocumentAsync(
+        HttpClient client,
+        Guid driverUserId,
+        Guid documentId,
+        bool approve,
+        string? reason = null)
+    {
+        return client.PostAsJsonAsync(
+            $"/api/v1/admin/drivers/{driverUserId}/documents/{documentId}/review",
+            new { approve, reason });
+    }
+
     public static Task<HttpResponseMessage> ReviewDisputeAsync(
         HttpClient client,
         Guid disputeId,

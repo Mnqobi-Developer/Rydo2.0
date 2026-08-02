@@ -17,13 +17,14 @@ function resolveEnvironment(value: string | undefined): AppEnvironment {
 }
 
 function resolveApiBaseUrl(value: string | undefined, environment: AppEnvironment) {
-  if (!value) {
+  const configuredValue = value ?? (environment === 'development' ? 'http://localhost:5190' : '')
+  if (!configuredValue) {
     throw new Error(
       'VITE_API_BASE_URL is required. Copy the matching .env example to .env.local.',
     )
   }
 
-  const url = new URL(value)
+  const url = new URL(configuredValue)
 
   if (environment !== 'development' && url.protocol !== 'https:') {
     throw new Error(`${environment} must use an HTTPS API URL.`)
@@ -37,4 +38,5 @@ const environment = resolveEnvironment(import.meta.env.VITE_APP_ENV)
 export const appConfig = Object.freeze({
   environment,
   apiBaseUrl: resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL, environment),
+  googleMapsWebApiKey: import.meta.env.VITE_GOOGLE_MAPS_WEB_API_KEY ?? '',
 })

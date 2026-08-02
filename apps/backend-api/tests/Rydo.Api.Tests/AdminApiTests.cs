@@ -121,6 +121,87 @@ public sealed class AdminApiTests
     }
 
     [Fact]
+    public async Task AdminCanRejectOneDocumentWithActionableFeedback()
+    {
+        await using var factory = new AuthenticationApiFactory();
+        using var client = factory.CreateClient();
+        var driver = await CreatePendingDriverAsync(client, "+27821203002", 4302);
+        var admin = await AdminTestClient.LoginAsync(client);
+        AuthenticationTestClient.UseBearerToken(client, admin.AccessToken);
+        var driverResponse = await client.GetAsync($"/api/v1/admin/drivers/{driver.User.Id}");
+        driverResponse.EnsureSuccessStatusCode();
+        var pending = await AdminTestClient.ReadAsync<AdminDriverResult>(driverResponse);
+        var identityDocument = pending.Documents.Single(document =>
+            document.DocumentType == DriverDocumentType.IdentityDocument);
+
+        var invalid = await AdminTestClient.ReviewDriverDocumentAsync(
+            client,
+            driver.User.Id,
+            identityDocument.Id,
+            approve: false);
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        var response = await AdminTestClient.ReviewDriverDocumentAsync(
+            client,
+            driver.User.Id,
+            identityDocument.Id,
+            approve: false,
+            reason: "The image is blurred. Upload a clear photo showing all four corners.");
+        response.EnsureSuccessStatusCode();
+        var reviewed = await AdminTestClient.ReadAsync<AdminDriverResult>(response);
+        Assert.Equal(DriverOnboardingStatus.Rejected, reviewed.Profile.OnboardingStatus);
+        Assert.Contains("blurred", reviewed.Profile.RejectionReason);
+        Assert.Equal(
+            DriverDocumentReviewStatus.Rejected,
+            reviewed.Documents.Single(document => document.Id == identityDocument.Id).ReviewStatus);
+        Assert.All(
+            reviewed.Documents.Where(document => document.Id != identityDocument.Id),
+            document => Assert.Equal(
+                DriverDocumentReviewStatus.PendingReview,
+                document.ReviewStatus));
+        Assert.Equal(DriverVehicleReviewStatus.PendingReview, reviewed.Vehicle!.ReviewStatus);
+
+        var auditResponse = await client.GetAsync("/api/v1/admin/audit");
+        var audit = await AdminTestClient.ReadAsync<PagedResult<AdminAuditResult>>(auditResponse);
+        var entry = Assert.Single(audit.Items);
+        Assert.Equal("driver-document.rejected", entry.Action);
+        Assert.Equal(identityDocument.Id, entry.EntityId);
+    }
+
+    [Fact]
+    public async Task AdminCanApproveIndividualDocumentWithoutClosingApplication()
+    {
+        await using var factory = new AuthenticationApiFactory();
+        using var client = factory.CreateClient();
+        var driver = await CreatePendingDriverAsync(client, "+27821203003", 4303);
+        var admin = await AdminTestClient.LoginAsync(client);
+        AuthenticationTestClient.UseBearerToken(client, admin.AccessToken);
+        var driverResponse = await client.GetAsync($"/api/v1/admin/drivers/{driver.User.Id}");
+        var pending = await AdminTestClient.ReadAsync<AdminDriverResult>(driverResponse);
+        var licence = pending.Documents.Single(document =>
+            document.DocumentType == DriverDocumentType.DriversLicense);
+
+        var contentResponse = await client.GetAsync(
+            $"/api/v1/admin/drivers/{driver.User.Id}/documents/{licence.Id}/content");
+        contentResponse.EnsureSuccessStatusCode();
+        Assert.Equal(licence.ContentType, contentResponse.Content.Headers.ContentType?.MediaType);
+        Assert.NotEmpty(await contentResponse.Content.ReadAsByteArrayAsync());
+
+        var response = await AdminTestClient.ReviewDriverDocumentAsync(
+            client,
+            driver.User.Id,
+            licence.Id,
+            approve: true);
+        response.EnsureSuccessStatusCode();
+        var reviewed = await AdminTestClient.ReadAsync<AdminDriverResult>(response);
+
+        Assert.Equal(DriverOnboardingStatus.PendingReview, reviewed.Profile.OnboardingStatus);
+        Assert.Equal(
+            DriverDocumentReviewStatus.Approved,
+            reviewed.Documents.Single(document => document.Id == licence.Id).ReviewStatus);
+    }
+
+    [Fact]
     public async Task AdminCanInspectTripsPaymentsAndLiveDriverLocations()
     {
         await using var factory = new AuthenticationApiFactory();

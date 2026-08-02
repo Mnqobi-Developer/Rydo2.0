@@ -49,6 +49,8 @@ public sealed class DriverDocumentsController(IDriverDocumentService driverDocum
     }
 
     [HttpPost]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(10 * 1024 * 1024 + 64 * 1024)]
     [ProducesResponseType<DriverDocumentResult>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -56,7 +58,7 @@ public sealed class DriverDocumentsController(IDriverDocumentService driverDocum
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<DriverDocumentResult>> Register(
-        RegisterDriverDocumentRequest request,
+        [FromForm] UploadDriverDocumentRequest request,
         CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var userId))
@@ -64,7 +66,7 @@ public sealed class DriverDocumentsController(IDriverDocumentService driverDocum
             return Unauthorized();
         }
 
-        if (!Enum.IsDefined(request.DocumentType))
+        if (!Enum.IsDefined(request.DocumentType) || request.File is null)
         {
             ModelState.AddModelError(
                 nameof(request.DocumentType),
@@ -72,15 +74,27 @@ public sealed class DriverDocumentsController(IDriverDocumentService driverDocum
             return ValidationProblem(ModelState);
         }
 
+        if (request.File.Length is < 1 or > 10 * 1024 * 1024)
+        {
+            ModelState.AddModelError(nameof(request.File),
+                "Documents must contain data and be no larger than 10 MB.");
+        }
+        if (request.File.ContentType is not ("application/pdf" or "image/jpeg" or "image/png"))
+        {
+            ModelState.AddModelError(nameof(request.File),
+                "Choose a PDF, JPEG, or PNG document.");
+        }
+        if (!ModelState.IsValid) return ValidationProblem(ModelState);
+
         try
         {
-            var document = await driverDocuments.RegisterAsync(
+            await using var content = request.File.OpenReadStream();
+            var document = await driverDocuments.UploadAsync(
                 userId,
                 request.DocumentType,
-                request.OriginalFileName,
-                request.ContentType,
-                request.SizeBytes,
-                request.Sha256,
+                Path.GetFileName(request.File.FileName),
+                request.File.ContentType,
+                content,
                 cancellationToken);
 
             return document is null
@@ -105,6 +119,49 @@ public sealed class DriverDocumentsController(IDriverDocumentService driverDocum
                 Detail = exception.Message,
             });
         }
+        catch (DriverDocumentStorageException exception)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Status = StatusCodes.Status503ServiceUnavailable,
+                Title = "Document storage unavailable",
+                Detail = exception.Message,
+            });
+        }
+    }
+
+    [HttpGet("{documentId:guid}/content")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> Download(
+        Guid documentId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+
+        try
+        {
+            var result = await driverDocuments.OpenContentAsync(
+                userId,
+                documentId,
+                cancellationToken);
+            return result is null
+                ? NotFound()
+                : File(
+                    result.Content,
+                    result.Document.ContentType,
+                    result.Document.OriginalFileName);
+        }
+        catch (DriverDocumentStorageException exception)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Status = StatusCodes.Status503ServiceUnavailable,
+                Title = "Document storage unavailable",
+                Detail = exception.Message,
+            });
+        }
     }
 
     private bool TryGetUserId(out Guid userId)
@@ -113,17 +170,11 @@ public sealed class DriverDocumentsController(IDriverDocumentService driverDocum
     }
 }
 
-public sealed record RegisterDriverDocumentRequest(
-    DriverDocumentType DocumentType,
+public sealed class UploadDriverDocumentRequest
+{
     [Required]
-    [MaxLength(255)]
-    [RegularExpression(@"^[^\\/]+$")]
-    string OriginalFileName,
+    public DriverDocumentType DocumentType { get; init; }
+
     [Required]
-    [RegularExpression(@"^(application/pdf|image/jpeg|image/png)$")]
-    string ContentType,
-    [Range(1, 10 * 1024 * 1024)]
-    long SizeBytes,
-    [Required]
-    [RegularExpression(@"^[A-Fa-f0-9]{64}$")]
-    string Sha256);
+    public IFormFile File { get; init; } = null!;
+}
