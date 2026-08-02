@@ -38,7 +38,15 @@ public sealed class PaymentService(
             throw new PaymentConflictException("A cancelled trip cannot be paid.");
         }
 
-        if (trip.FinalFareAmount is null)
+        var payableAmount = trip.FinalFareAmount;
+
+        if (method == PaymentMethod.PayFast &&
+            trip.Status is TripStatus.Accepted or TripStatus.DriverArrived or TripStatus.InProgress)
+        {
+            payableAmount ??= trip.EstimatedFareAmount;
+        }
+
+        if (payableAmount is null)
         {
             throw new TripFareNotFinalizedException();
         }
@@ -53,7 +61,7 @@ public sealed class PaymentService(
                 "A payment with another method already exists for this trip.");
         }
 
-        if (method == PaymentMethod.PayFast && trip.FinalFareAmount < 5m)
+        if (method == PaymentMethod.PayFast && payableAmount < 5m)
         {
             throw new PaymentConflictException(
                 "PayFast requires a minimum once-off payment of R5.00.");
@@ -72,7 +80,7 @@ public sealed class PaymentService(
                 tripId,
                 passengerUserId,
                 method,
-                trip.FinalFareAmount.Value,
+                payableAmount.Value,
                 timeProvider.GetUtcNow());
             database.Payments.Add(payment);
             await SaveChangesAsync(cancellationToken);

@@ -70,6 +70,7 @@ module.exports = ({ config }) => {
       ...config.android,
       package: `za.co.rydo.passenger${settings.identifierSuffix}`,
       softwareKeyboardLayoutMode: 'resize',
+      usesCleartextTraffic: variant === 'development',
       config: {
         ...config.android?.config,
         ...(androidMapsKey ? { googleMaps: { apiKey: androidMapsKey } } : {}),

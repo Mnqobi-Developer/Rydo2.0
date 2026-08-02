@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Rydo.Application.Matching;
 using Rydo.Domain.Matching;
 using Rydo.Domain.Trips;
 
@@ -7,6 +8,40 @@ namespace Rydo.Api.Tests;
 
 public sealed class DriverMatchingTests
 {
+    [Fact]
+    public async Task DriverPerformanceUpdatesWhenTripIsCompleted()
+    {
+        await using var factory = new AuthenticationApiFactory();
+        using var client = factory.CreateClient();
+        var passenger = await TripTestClient.CreatePassengerAsync(client, "+27820001200");
+        var trip = await TripTestClient.RequestAsync(client);
+        var driver = await AuthenticationTestClient.SignInAsync(
+            client,
+            "+27820001299",
+            "Driver");
+        await DriverMatchingTestClient.MakeEligibleAndOnlineAsync(
+            factory,
+            client,
+            driver,
+            1299);
+        await DriverMatchingTestClient.MatchAsync(client, passenger.AccessToken, trip.Id);
+        AuthenticationTestClient.UseBearerToken(client, driver.AccessToken);
+        await TripTestClient.TransitionAsync(client, trip.Id, "accept");
+        await TripTestClient.TransitionAsync(client, trip.Id, "arrive");
+        await TripTestClient.TransitionAsync(client, trip.Id, "start");
+        await TripTestClient.TransitionAsync(client, trip.Id, "complete");
+
+        var response = await client.GetAsync("/api/v1/drivers/me/performance");
+        response.EnsureSuccessStatusCode();
+        var performance = await response.Content.ReadFromJsonAsync<DriverPerformanceResult>();
+
+        Assert.NotNull(performance);
+        Assert.Equal(100, performance.AcceptanceRate);
+        Assert.Equal(100, performance.CompletionRate);
+        Assert.Null(performance.AverageRating);
+        Assert.Equal(0, performance.RatingCount);
+    }
+
     [Fact]
     public async Task UnapprovedDriverCannotGoOnline()
     {

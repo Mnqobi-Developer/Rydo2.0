@@ -131,7 +131,7 @@ function AccountContent({
               <Pressable
                 accessibilityLabel="Open settings"
                 accessibilityRole="button"
-                android_ripple={{ color: 'rgba(18,97,216,0.10)', borderless: true }}
+                android_ripple={{ color: 'rgba(36,87,255,0.10)', borderless: true }}
                 onPress={() => setActiveView('settings')}
                 style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
               >
@@ -331,7 +331,7 @@ function MenuRow({
   return (
     <Pressable
       accessibilityRole="button"
-      android_ripple={{ color: 'rgba(18,97,216,0.08)' }}
+      android_ripple={{ color: 'rgba(36,87,255,0.08)' }}
       onPress={onPress}
       style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
     >
@@ -353,7 +353,7 @@ function DetailHeader({ title, onBack }: { title: string; onBack(): void }) {
       <Pressable
         accessibilityLabel="Back to account"
         accessibilityRole="button"
-        android_ripple={{ color: 'rgba(18,97,216,0.10)', borderless: true }}
+        android_ripple={{ color: 'rgba(36,87,255,0.10)', borderless: true }}
         onPress={onBack}
         style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
       >

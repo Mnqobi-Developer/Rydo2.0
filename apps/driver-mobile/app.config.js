@@ -1,11 +1,4 @@
-import type { ConfigContext, ExpoConfig } from 'expo/config';
-
-type AppVariant = 'development' | 'staging' | 'production';
-
-const variants: Record<
-  AppVariant,
-  { nameSuffix: string; identifierSuffix: string; schemeSuffix: string }
-> = {
+const variants = {
   development: {
     nameSuffix: ' Dev',
     identifierSuffix: '.dev',
@@ -19,20 +12,20 @@ const variants: Record<
   production: { nameSuffix: '', identifierSuffix: '', schemeSuffix: '' },
 };
 
-function resolveVariant(value: string | undefined): AppVariant {
+function resolveVariant(value) {
   const variant = value ?? 'production';
 
   if (!Object.hasOwn(variants, variant)) {
     throw new Error(`Unsupported RYDO Driver app variant: ${variant}`);
   }
 
-  return variant as AppVariant;
+  return variant;
 }
 
-export default ({ config }: ConfigContext): ExpoConfig => {
+module.exports = ({ config }) => {
   const variant = resolveVariant(process.env.APP_VARIANT);
   const settings = variants[variant];
-  const plugins: NonNullable<ExpoConfig['plugins']> = [
+  const plugins = [
     ...(config.plugins ?? []),
     'expo-image',
     [
@@ -61,7 +54,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   return {
     ...config,
     name: `RYDO Driver${settings.nameSuffix}`,
-    slug: 'rydo-driver',
+    slug: 'rydo20-driver',
+    owner: 'lenkantereke25',
     scheme: `rydo-driver${settings.schemeSuffix}`,
     ios: {
       ...config.ios,
@@ -75,6 +69,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.android,
       package: `za.co.rydo.driver${settings.identifierSuffix}`,
       softwareKeyboardLayoutMode: 'resize',
+      usesCleartextTraffic: variant === 'development',
       config: {
         ...config.android?.config,
         ...(androidMapsKey ? { googleMaps: { apiKey: androidMapsKey } } : {}),

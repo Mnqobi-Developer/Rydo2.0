@@ -12,6 +12,21 @@ const oldTokens = tokenPair('old-access', 'old-refresh');
 const newTokens = tokenPair('new-access', 'new-refresh');
 
 describe('API client', () => {
+  it('sends FormData without JSON encoding or overriding the multipart boundary', async () => {
+    const body = new FormData();
+    body.append('documentType', 'IdentityDocument');
+    body.append('file', new Blob(['%PDF-test'], { type: 'application/pdf' }), 'identity.pdf');
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.body).toBe(body);
+      expect(new Headers(init?.headers).has('content-type')).toBe(false);
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer old-access');
+      return jsonResponse({ uploaded: true });
+    });
+    const client = createClient(fetchMock, memoryTokenStore(oldTokens));
+
+    await expect(client.post('/documents', body)).resolves.toEqual({ uploaded: true });
+  });
+
   it('attaches JWTs and rotates one refresh token for concurrent 401 responses', async () => {
     const tokenStore = memoryTokenStore(oldTokens);
     let refreshCalls = 0;

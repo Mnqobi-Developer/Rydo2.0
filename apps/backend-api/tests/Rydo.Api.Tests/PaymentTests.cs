@@ -129,6 +129,60 @@ public sealed class PaymentTests
     }
 
     [Fact]
+    public async Task PayFastCheckoutCanBeginAfterDriverAcceptsUsingEstimatedFare()
+    {
+        var gateway = new FakePayFastGateway();
+        await using var factory = PaymentTestClient.CreatePayFastFactory(gateway);
+        using var client = factory.CreateClient();
+        var passenger = await TripTestClient.CreatePassengerAsync(client, "+27820001309");
+        var trip = await TripTestClient.RequestAsync(client);
+        var driver = await AuthenticationTestClient.SignInAsync(
+            client,
+            "+27820001310",
+            "Driver");
+        await DriverMatchingTestClient.MakeEligibleAndOnlineAsync(factory, client, driver, 1310);
+        await DriverMatchingTestClient.MatchAsync(client, passenger.AccessToken, trip.Id);
+        AuthenticationTestClient.UseBearerToken(client, driver.AccessToken);
+        var accepted = await TripTestClient.TransitionAsync(client, trip.Id, "accept");
+        AuthenticationTestClient.UseBearerToken(client, passenger.AccessToken);
+
+        var created = await PaymentTestClient.CreateAsync(client, trip.Id, "PayFast");
+
+        Assert.Equal(accepted.EstimatedFareAmount, created.Payment.Amount);
+        Assert.NotNull(created.PayFastCheckout);
+    }
+
+    [Fact]
+    public async Task CancellingAcceptedTripAlsoCancelsAwaitingPayFastPayment()
+    {
+        var gateway = new FakePayFastGateway();
+        await using var factory = PaymentTestClient.CreatePayFastFactory(gateway);
+        using var client = factory.CreateClient();
+        var passenger = await TripTestClient.CreatePassengerAsync(client, "+27820001311");
+        var trip = await TripTestClient.RequestAsync(client);
+        var driver = await AuthenticationTestClient.SignInAsync(
+            client,
+            "+27820001312",
+            "Driver");
+        await DriverMatchingTestClient.MakeEligibleAndOnlineAsync(factory, client, driver, 1312);
+        await DriverMatchingTestClient.MatchAsync(client, passenger.AccessToken, trip.Id);
+        AuthenticationTestClient.UseBearerToken(client, driver.AccessToken);
+        await TripTestClient.TransitionAsync(client, trip.Id, "accept");
+        AuthenticationTestClient.UseBearerToken(client, passenger.AccessToken);
+        await PaymentTestClient.CreateAsync(client, trip.Id, "PayFast");
+
+        var cancelResponse = await client.PostAsJsonAsync(
+            $"/api/v1/trips/{trip.Id}/cancel",
+            new { reason = "Plans changed" });
+        cancelResponse.EnsureSuccessStatusCode();
+        var paymentResponse = await client.GetAsync($"/api/v1/trips/{trip.Id}/payment");
+        paymentResponse.EnsureSuccessStatusCode();
+        var cancelledPayment = await PaymentTestClient.ReadAsync(paymentResponse);
+
+        Assert.Equal(PaymentStatus.Cancelled, cancelledPayment.Status);
+    }
+
+    [Fact]
     public async Task ValidPayFastNotificationMarksPaymentPaidAndIsIdempotent()
     {
         var gateway = new FakePayFastGateway();

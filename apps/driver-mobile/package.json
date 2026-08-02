@@ -12,6 +12,8 @@
     "expo": "~57.0.9",
     "expo-constants": "~57.0.8",
     "expo-dev-client": "~57.0.10",
+    "expo-document-picker": "~57.0.1",
+    "expo-file-system": "~57.0.1",
     "expo-font": "~57.0.1",
     "expo-image": "~57.0.1",
     "expo-linking": "~57.0.4",
@@ -28,11 +30,11 @@
     "react-native-gesture-handler": "~2.32.0",
     "react-native-keyboard-controller": "1.21.9",
     "react-native-maps": "1.27.2",
-    "react-native-reanimated": "4.5.1",
+    "react-native-reanimated": "4.5.0",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
@@ -43,10 +45,10 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "cross-env APP_VARIANT=development expo start --dev-client",
-    "start:lan": "cross-env APP_VARIANT=development expo start --dev-client --lan",
-    "start:tunnel": "cross-env APP_VARIANT=development expo start --dev-client --tunnel",
-    "start:go": "expo start --go",
+    "start": "cross-env APP_VARIANT=development expo start --dev-client --port 8082",
+    "start:lan": "cross-env APP_VARIANT=development expo start --dev-client --lan --port 8082",
+    "start:tunnel": "cross-env APP_VARIANT=development expo start --dev-client --tunnel --port 8082",
+    "start:go": "expo start --go --lan --port 8082",
     "prebuild:dev": "cross-env APP_VARIANT=development expo prebuild --clean",
     "android": "cross-env APP_VARIANT=development expo run:android",
     "ios": "cross-env APP_VARIANT=development expo run:ios",

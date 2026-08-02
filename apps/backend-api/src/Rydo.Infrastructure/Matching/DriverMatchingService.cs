@@ -287,12 +287,48 @@ public sealed class DriverMatchingService(
 
         await SaveChangesAsync(cancellationToken);
 
-        return await ProjectOffers(database.TripOffers
+        var pendingOffers = database.TripOffers
             .Where(offer => offer.DriverUserId == driverUserId &&
                 offer.Status == TripOfferStatus.Pending &&
-                offer.ExpiresAt > now))
-            .OrderBy(offer => offer.PickupDistanceKilometres)
+                offer.ExpiresAt > now)
+            .OrderBy(offer => offer.PickupDistanceKilometres);
+
+        return await ProjectOffers(pendingOffers)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<DriverPerformanceResult> GetPerformanceAsync(
+        Guid driverUserId,
+        CancellationToken cancellationToken)
+    {
+        var resolvedOffers = database.TripOffers
+            .Where(offer => offer.DriverUserId == driverUserId &&
+                offer.Status != TripOfferStatus.Pending);
+        var resolvedOfferCount = await resolvedOffers.CountAsync(cancellationToken);
+        var acceptedOfferCount = await resolvedOffers.CountAsync(
+            offer => offer.Status == TripOfferStatus.Accepted,
+            cancellationToken);
+        var completedTripCount = await database.Trips.CountAsync(
+            trip => trip.DriverUserId == driverUserId && trip.Status == TripStatus.Completed,
+            cancellationToken);
+        var driverCancelledTripCount = await database.Trips.CountAsync(
+            trip => trip.DriverUserId == driverUserId &&
+                trip.Status == TripStatus.Cancelled &&
+                trip.CancelledByUserId == driverUserId,
+            cancellationToken);
+        var ratingScores = await database.Ratings
+            .Where(rating => rating.RatedUserId == driverUserId)
+            .Select(rating => rating.Score)
+            .ToListAsync(cancellationToken);
+        var terminalTripCount = completedTripCount + driverCancelledTripCount;
+
+        return new DriverPerformanceResult(
+            Percentage(acceptedOfferCount, resolvedOfferCount),
+            Percentage(completedTripCount, terminalTripCount),
+            ratingScores.Count == 0
+                ? null
+                : Math.Round(ratingScores.Average(), 2, MidpointRounding.AwayFromZero),
+            ratingScores.Count);
     }
 
     public async Task<TripOfferResult> DeclineOfferAsync(
@@ -486,6 +522,9 @@ public sealed class DriverMatchingService(
                    trip.DestinationLatitude,
                    trip.DestinationLongitude,
                    offer.PickupDistanceKilometres,
+                   trip.RideCategory,
+                   trip.EstimatedFareAmount,
+                   trip.FareCurrency,
                    offer.Status,
                    offer.OfferedAt,
                    offer.ExpiresAt,
@@ -554,6 +593,11 @@ public sealed class DriverMatchingService(
 
         return 2 * earthRadiusKilometres * Math.Asin(Math.Sqrt(haversine));
     }
+
+    private static double? Percentage(int numerator, int denominator) =>
+        denominator == 0
+            ? null
+            : Math.Round(numerator * 100d / denominator, 1, MidpointRounding.AwayFromZero);
 
     private static double DegreesToRadians(double degrees)
     {

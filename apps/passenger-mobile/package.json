@@ -32,6 +32,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
+    "react-native-webview": "13.16.1",
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
@@ -44,10 +45,10 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "cross-env APP_VARIANT=development expo start --dev-client",
-    "start:lan": "cross-env APP_VARIANT=development expo start --dev-client --lan",
-    "start:tunnel": "cross-env APP_VARIANT=development expo start --dev-client --tunnel",
-    "start:go": "expo start --go",
+    "start": "cross-env APP_VARIANT=development expo start --dev-client --port 8081",
+    "start:lan": "cross-env APP_VARIANT=development expo start --dev-client --lan --port 8081",
+    "start:tunnel": "cross-env APP_VARIANT=development expo start --dev-client --tunnel --port 8081",
+    "start:go": "expo start --go --lan --port 8081",
     "prebuild:dev": "cross-env APP_VARIANT=development expo prebuild --clean",
     "android": "cross-env APP_VARIANT=development expo run:android",
     "ios": "cross-env APP_VARIANT=development expo run:ios",

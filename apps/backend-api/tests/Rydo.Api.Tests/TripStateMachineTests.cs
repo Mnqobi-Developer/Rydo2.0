@@ -55,7 +55,8 @@ public sealed class TripStateMachineTests
         var completed = await TripTestClient.TransitionAsync(client, requested.Id, "complete");
         Assert.Equal(TripStatus.Completed, completed.Status);
         Assert.NotNull(completed.CompletedAt);
-        Assert.Equal(5, completed.Version);
+        Assert.Equal(6, completed.Version);
+        Assert.Equal(completed.EstimatedFareAmount, completed.FinalFareAmount);
         Assert.True(completed.UpdatedAt > completed.RequestedAt);
 
         AuthenticationTestClient.UseBearerToken(client, passenger.AccessToken);

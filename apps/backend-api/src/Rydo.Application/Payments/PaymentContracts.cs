@@ -86,7 +86,7 @@ public sealed class PaymentConflictException(string message) : Exception(message
 public sealed class TripFareNotFinalizedException : Exception
 {
     public TripFareNotFinalizedException()
-        : base("The trip fare must be finalized before creating a payment.")
+        : base("The trip fare is not ready for payment. PayFast can begin after driver acceptance; cash begins after completion.")
     {
     }
 }

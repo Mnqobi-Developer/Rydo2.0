@@ -1,5 +1,6 @@
 using Rydo.Application.Trips;
 using Rydo.Domain.Matching;
+using Rydo.Domain.Pricing;
 
 namespace Rydo.Application.Matching;
 
@@ -23,6 +24,9 @@ public sealed record TripOfferResult(
     double DestinationLatitude,
     double DestinationLongitude,
     double PickupDistanceKilometres,
+    RideCategory? RideCategory,
+    decimal? EstimatedFareAmount,
+    string? FareCurrency,
     TripOfferStatus Status,
     DateTimeOffset OfferedAt,
     DateTimeOffset ExpiresAt,
@@ -33,6 +37,12 @@ public sealed record TripMatchingResult(
     Guid TripId,
     int OfferedDriverCount,
     DateTimeOffset? OffersExpireAt);
+
+public sealed record DriverPerformanceResult(
+    double? AcceptanceRate,
+    double? CompletionRate,
+    double? AverageRating,
+    int RatingCount);
 
 public interface IDriverMatchingService
 {
@@ -62,6 +72,10 @@ public interface IDriverMatchingService
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<TripOfferResult>> ListOffersAsync(
+        Guid driverUserId,
+        CancellationToken cancellationToken);
+
+    Task<DriverPerformanceResult> GetPerformanceAsync(
         Guid driverUserId,
         CancellationToken cancellationToken);
 

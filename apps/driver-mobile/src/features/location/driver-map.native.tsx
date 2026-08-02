@@ -1,4 +1,5 @@
 import type { GeoCoordinate } from '@rydo/mobile-api-client';
+import { colors } from '@rydo/mobile-design-system';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
 export function DriverMap({ location }: { location: GeoCoordinate | null }) {
@@ -11,7 +12,7 @@ export function DriverMap({ location }: { location: GeoCoordinate | null }) {
       showsUserLocation
       showsMyLocationButton={false}
     >
-      {location ? <Marker coordinate={location} title="Your location" pinColor="#178A55" /> : null}
+      {location ? <Marker coordinate={location} title="Your location" pinColor={colors.blue} /> : null}
     </MapView>
   );
 }

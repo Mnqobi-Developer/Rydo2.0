@@ -3,11 +3,15 @@ import {
   decodeGooglePolyline,
   isApiError,
   type CreateFareQuoteRequest,
+  type DriverAvailability,
   type FareOption,
   type FareQuote,
   type GeoCoordinate,
   type Place,
   type PlacePrediction,
+  type Payment,
+  type PaymentMethod,
+  type Rating,
   type RequestTripRequest,
   type RideCategory,
   type Trip,
@@ -44,6 +48,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '@/api';
 
 import { RideMap, type RideMapHandle } from './ride-map';
+import { PayFastCheckoutModal } from './payfast-checkout';
+import {
+  createTripPayment,
+  rateTrip,
+  tripPaymentKey,
+  tripPaymentQuery,
+  tripRatingKey,
+  tripRatingQuery,
+} from './trip-lifecycle-api';
 
 type Field = 'pickup' | 'destination';
 type LocationStatus = 'locating' | 'ready' | 'denied' | 'error';
@@ -77,12 +90,46 @@ export function RidePlannerScreen({
   const [selectedCategory, setSelectedCategory] = useState<RideCategory>('Solo');
   const [bookingStep, setBookingStep] = useState<BookingStep>('browse');
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash');
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [trackedTripId, setTrackedTripId] = useState<string | null>(null);
+  const [ratingScore, setRatingScore] = useState(5);
+  const [ratingComment, setRatingComment] = useState('');
+  const [rideRequestNotice, setRideRequestNotice] = useState<string | null>(null);
   const [message, setMessage] = useState('Finding your current location…');
   const sessionTokenRef = useRef(createSessionToken());
   const coordinateLookupRef = useRef<Record<Field, number>>({ pickup: 0, destination: 0 });
   const locationRequestRef = useRef<Promise<void> | null>(null);
   const appStateRef = useRef(AppState.currentState);
+  const paymentAttemptRef = useRef<string | null>(null);
+  const rideSubmissionRef = useRef(false);
+  const matchingRequestRef = useRef<string | null>(null);
+  const trackedCompletedTrip = trackedTripId
+    ? recentTrips.find((trip) => trip.id === trackedTripId) ?? null
+    : null;
+  const flowTrip = activeTrip ?? trackedCompletedTrip;
+  const flowTripId = flowTrip?.id ?? '';
+  const assignedDriverId = flowTrip?.driverUserId ?? '';
+  const driverAvailability = useQuery<DriverAvailability>({
+    queryKey: ['driver-availability', assignedDriverId],
+    queryFn: () => Promise.reject(new Error('Driver location is delivered through SignalR.')),
+    enabled: false,
+  });
+  const driverLocation = driverAvailability.data?.locationUpdatedAt
+    ? {
+        latitude: driverAvailability.data.latitude,
+        longitude: driverAvailability.data.longitude,
+      }
+    : null;
+  const payment = useQuery({
+    ...tripPaymentQuery(flowTripId),
+    enabled: Boolean(flowTripId && flowTrip?.status !== 'Requested'),
+  });
+  const rating = useQuery({
+    ...tripRatingQuery(flowTripId),
+    enabled: flowTrip?.status === 'Completed',
+  });
 
   useEffect(() => {
     const timeout = setTimeout(() => setDebouncedQuery(query.trim()), 350);
@@ -106,8 +153,9 @@ export function RidePlannerScreen({
     },
   });
 
+  const fareQuoteKey = ['pricing', 'quote', pickup?.location, destination?.location] as const;
   const fareQuote = useQuery({
-    queryKey: ['pricing', 'quote', pickup?.location, destination?.location],
+    queryKey: fareQuoteKey,
     enabled: Boolean(pickup && destination),
     queryFn: ({ signal }) =>
       apiClient.post<FareQuote, CreateFareQuoteRequest>(
@@ -115,7 +163,9 @@ export function RidePlannerScreen({
         { pickup: pickup!.location, destination: destination!.location },
         { signal },
       ),
-    staleTime: 4 * 60 * 1000,
+    // Fare quotes are one-time booking tokens, not reusable cached records.
+    staleTime: 0,
+    gcTime: 0,
     refetchInterval: 4 * 60 * 1000,
   });
   const encodedPolyline = fareQuote.data?.encodedPolyline;
@@ -135,11 +185,85 @@ export function RidePlannerScreen({
       return trip;
     },
     onSuccess: (trip) => {
+      setRideRequestNotice(null);
+      setTrackedTripId(trip.id);
       setMessage('Finding the nearest available driver…');
       setBookingStep('matching');
       queryClient.setQueryData<Trip[]>(['trips'], (current = []) => [trip, ...current.filter((item) => item.id !== trip.id)]);
     },
+    onError: (error) => {
+      const detail = isApiError(error)
+        ? error.problem?.detail ?? error.message
+        : '';
+      const quoteWasConsumed = isApiError(error) &&
+        error.status === 409 &&
+        detail.toLowerCase().includes('fare quote') &&
+        detail.toLowerCase().includes('used');
+
+      if (quoteWasConsumed) {
+        setRideRequestNotice('That fare was already used, so we refreshed it. Confirm pickup again with the new fare.');
+        void queryClient.invalidateQueries({
+          queryKey: fareQuoteKey,
+          exact: true,
+          refetchType: 'active',
+        });
+        void queryClient.invalidateQueries({ queryKey: ['trips'] });
+      } else {
+        setRideRequestNotice(null);
+      }
+    },
+    onSettled: () => {
+      rideSubmissionRef.current = false;
+    },
   });
+
+  useEffect(() => {
+    const requestedTripId = activeTrip?.status === 'Requested' ? activeTrip.id : null;
+    if (!requestedTripId) return;
+
+    let disposed = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const matchAgain = async () => {
+      if (disposed || matchingRequestRef.current === requestedTripId) return;
+      matchingRequestRef.current = requestedTripId;
+      try {
+        const result = await apiClient.request<TripMatchingResult>(
+          `/api/v1/trips/${requestedTripId}/matching`,
+          { method: 'POST', retry: 'never' },
+        );
+        if (!disposed) {
+          setMessage(result.offeredDriverCount > 0
+            ? `Request sent to ${result.offeredDriverCount} nearby ${result.offeredDriverCount === 1 ? 'driver' : 'drivers'}…`
+            : 'No available driver yet. We’ll keep searching…');
+        }
+      } catch (error) {
+        if (isApiError(error) && error.status === 409) {
+          void queryClient.invalidateQueries({ queryKey: ['trips'] });
+        } else if (!disposed && (!isApiError(error) || error.status !== 429)) {
+          setMessage('Searching for nearby drivers…');
+        }
+      } finally {
+        if (matchingRequestRef.current === requestedTripId) {
+          matchingRequestRef.current = null;
+        }
+        if (!disposed) retryTimer = setTimeout(matchAgain, 10_000);
+      }
+    };
+
+    // The initial booking mutation performs the first match. This retry also recovers
+    // requested trips restored after app/network interruptions.
+    retryTimer = setTimeout(matchAgain, requestRide.isPending ? 10_000 : 1_000);
+
+    return () => {
+      disposed = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      if (matchingRequestRef.current === requestedTripId) {
+        matchingRequestRef.current = null;
+      }
+    };
+  }, [activeTrip?.id, activeTrip?.status, queryClient, requestRide.isPending]);
+
   const cancelRide = useMutation({
     mutationFn: ({ tripId, reason }: { tripId: string; reason: string }) => apiClient.post<Trip, { reason: string }>(
       `/api/v1/trips/${tripId}/cancel`,
@@ -153,6 +277,35 @@ export function RidePlannerScreen({
       resetPlanning();
     },
   });
+  const createPayment = useMutation({
+    mutationFn: ({ tripId, method }: { tripId: string; method: PaymentMethod }) =>
+      createTripPayment(tripId, { method }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(tripPaymentKey(result.payment.tripId), result.payment);
+      if (result.payFastCheckout) setCheckoutOpen(true);
+    },
+  });
+  const submitRating = useMutation({
+    mutationFn: ({ tripId, score, comment }: { tripId: string; score: number; comment: string }) =>
+      rateTrip(tripId, { score, comment: comment.trim() || null }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(tripRatingKey(result.tripId), result);
+    },
+  });
+
+  useEffect(() => {
+    if (!flowTrip || payment.data || createPayment.isPending) return;
+    const readyForPayment = paymentMethod === 'PayFast'
+      ? flowTrip.status === 'Accepted' ||
+        flowTrip.status === 'DriverArrived' ||
+        flowTrip.status === 'InProgress' ||
+        flowTrip.status === 'Completed'
+      : flowTrip.status === 'Completed';
+    const attemptKey = `${flowTrip.id}:${paymentMethod}`;
+    if (!readyForPayment || paymentAttemptRef.current === attemptKey) return;
+    paymentAttemptRef.current = attemptKey;
+    createPayment.mutate({ tripId: flowTrip.id, method: paymentMethod });
+  }, [createPayment, flowTrip, payment.data, paymentMethod]);
 
   useEffect(() => {
     if (encodedPolyline) {
@@ -161,6 +314,7 @@ export function RidePlannerScreen({
   }, [encodedPolyline]);
 
   const selectPlace = useCallback((place: Place, field: Field) => {
+    setRideRequestNotice(null);
     if (field === 'pickup') {
       setPickup(place);
       setActiveField('destination');
@@ -266,12 +420,15 @@ export function RidePlannerScreen({
   }
 
   function submitRideRequest() {
-    if (!pickup || !destination || !profileReady || !fareQuote.data) return;
+    if (rideSubmissionRef.current || requestRide.isPending ||
+        !pickup || !destination || !profileReady || !fareQuote.data) return;
     if (Date.parse(fareQuote.data.expiresAt) <= Date.now()) {
       setMessage('Refreshing your fare before requesting the ride.');
       void fareQuote.refetch();
       return;
     }
+    rideSubmissionRef.current = true;
+    setRideRequestNotice(null);
     requestRide.reset();
     requestRide.mutate({
       pickupAddress: pickup.address,
@@ -354,6 +511,10 @@ export function RidePlannerScreen({
   }
 
   function resetPlanning() {
+    queryClient.removeQueries({ queryKey: ['pricing', 'quote'] });
+    rideSubmissionRef.current = false;
+    setRideRequestNotice(null);
+    setTrackedTripId(null);
     setDestination(null);
     setSelectedCategory('Solo');
     setBookingStep('browse');
@@ -373,19 +534,19 @@ export function RidePlannerScreen({
     if (routeCoordinates.length > 1) mapRef.current?.fitRoute(routeCoordinates);
   }
 
-  const rideError = requestRide.error
+  const rideError = rideRequestNotice ?? (requestRide.error
     ? isApiError(requestRide.error)
       ? requestRide.error.problem?.detail ?? requestRide.error.message
       : 'Your ride could not be requested.'
-    : undefined;
+    : undefined);
   const uniqueRecentTrips = recentTrips.filter(
     (trip, index, trips) => trips.findIndex((candidate) => candidate.destinationAddress === trip.destinationAddress) === index,
   ).slice(0, 3);
   const selectedFare = fareQuote.data?.options.find((option) => option.category === selectedCategory);
-  const focusedFlow = Boolean(activeTrip) || bookingStep !== 'browse';
-  const routeOrigin = activeTrip?.pickupAddress ?? pickup?.address;
-  const routeDestination = activeTrip?.destinationAddress ?? destination?.address;
-  const plannerSnapPoints: `${number}%`[] = activeTrip || bookingStep === 'matching'
+  const focusedFlow = Boolean(flowTrip) || bookingStep !== 'browse';
+  const routeOrigin = flowTrip?.pickupAddress ?? pickup?.address;
+  const routeDestination = flowTrip?.destinationAddress ?? destination?.address;
+  const plannerSnapPoints: `${number}%`[] = flowTrip || bookingStep === 'matching'
     ? ['44%', '70%', '96%']
     : bookingStep === 'routeReady'
       ? ['62%', '78%', '96%']
@@ -400,6 +561,7 @@ export function RidePlannerScreen({
       <RideMap
         ref={mapRef}
         currentLocation={currentLocation}
+        driverLocation={driverLocation}
         pickup={pickup?.location ?? null}
         destination={destination?.location ?? null}
         route={routeCoordinates}
@@ -428,7 +590,7 @@ export function RidePlannerScreen({
       ) : null}
       {focusedFlow && routeOrigin && routeDestination ? (
         <View style={[styles.routePill, { top: insets.top + spacing.sm }]}>
-          {!activeTrip ? (
+          {!flowTrip ? (
             <TouchableOpacity accessibilityLabel="Close ride planning" style={styles.routePillClose} onPress={resetPlanning}>
               <Text style={styles.routePillCloseText}>×</Text>
             </TouchableOpacity>
@@ -448,26 +610,80 @@ export function RidePlannerScreen({
         scrollable
         onChange={setSheetIndex}
       >
-        {activeTrip ? (
+        {flowTrip ? (
           <>
             <View style={styles.statusHeadingRow}>
               <View style={styles.statusPulse}><View style={styles.statusPulseCenter} /></View>
               <View style={styles.statusHeadingCopy}>
-                <Text selectable style={styles.focusedTitle}>{tripPanelTitle(activeTrip.status)}</Text>
-                <Text selectable style={styles.focusedSubtitle}>{tripStatusMessage(activeTrip.status)}</Text>
+                <Text selectable style={styles.focusedTitle}>{tripPanelTitle(flowTrip.status)}</Text>
+                <Text selectable style={styles.focusedSubtitle}>{tripStatusMessage(flowTrip.status)}</Text>
               </View>
             </View>
             <View style={styles.progressTrack}><View style={styles.progressValue} /></View>
             <RideCard
-              title={`${categoryLabel(activeTrip.rideCategory ?? 'Solo')} · ${formatTripStatus(activeTrip.status)}`}
-              pickup={activeTrip.pickupAddress}
-              destination={activeTrip.destinationAddress}
-              fare={activeTrip.estimatedFareAmount == null
+              title={`${categoryLabel(flowTrip.rideCategory ?? 'Solo')} · ${formatTripStatus(flowTrip.status)}`}
+              pickup={flowTrip.pickupAddress}
+              destination={flowTrip.destinationAddress}
+              fare={flowTrip.estimatedFareAmount == null
                 ? undefined
-                : formatFare(activeTrip.estimatedFareAmount, activeTrip.fareCurrency ?? 'ZAR')}
+                : formatFare(flowTrip.finalFareAmount ?? flowTrip.estimatedFareAmount, flowTrip.fareCurrency ?? 'ZAR')}
               selected
             />
-            {activeTrip.status === 'Requested' || activeTrip.status === 'Accepted' || activeTrip.status === 'DriverArrived' ? (
+            {paymentMethod === 'PayFast' && flowTrip.status !== 'Completed' && flowTrip.status !== 'Requested' ? (
+              <View style={styles.paymentProgressCard}>
+                <View style={styles.paymentProgressCopy}>
+                  <Text selectable style={styles.paymentProgressTitle}>Card payment</Text>
+                  <Text selectable style={createPayment.error ? styles.error : styles.paymentProgressMessage}>
+                    {createPayment.error
+                      ? paymentErrorMessage(createPayment.error)
+                      : payment.data?.status === 'Paid'
+                        ? 'Payment confirmed by PayFast.'
+                        : createPayment.data?.payFastCheckout
+                          ? 'Secure checkout is ready.'
+                          : 'Preparing secure checkout…'}
+                  </Text>
+                </View>
+                {createPayment.data?.payFastCheckout && payment.data?.status !== 'Paid' ? (
+                  <Pressable style={styles.checkoutAction} onPress={() => setCheckoutOpen(true)}>
+                    <Text selectable style={styles.checkoutActionText}>Pay now</Text>
+                  </Pressable>
+                ) : createPayment.error ? (
+                  <Pressable
+                    style={styles.checkoutAction}
+                    onPress={() => {
+                      paymentAttemptRef.current = null;
+                      createPayment.reset();
+                      createPayment.mutate({ tripId: flowTrip.id, method: 'PayFast' });
+                    }}
+                  >
+                    <Text selectable style={styles.checkoutActionText}>Retry</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+            {flowTrip.status === 'Completed' ? (
+              <PassengerCompletionPanel
+                payment={payment.data ?? null}
+                paymentError={createPayment.error ? paymentErrorMessage(createPayment.error) : undefined}
+                rating={rating.data ?? null}
+                ratingComment={ratingComment}
+                ratingPending={submitRating.isPending}
+                ratingScore={ratingScore}
+                onChangeComment={setRatingComment}
+                onChangeScore={setRatingScore}
+                onDone={resetPlanning}
+                onRetryPayment={() => {
+                  paymentAttemptRef.current = null;
+                  createPayment.reset();
+                  createPayment.mutate({ tripId: flowTrip.id, method: paymentMethod });
+                }}
+                onSubmitRating={() => submitRating.mutate({
+                  tripId: flowTrip.id,
+                  score: ratingScore,
+                  comment: ratingComment,
+                })}
+              />
+            ) : flowTrip.status === 'Requested' || flowTrip.status === 'Accepted' || flowTrip.status === 'DriverArrived' ? (
               <TouchableOpacity
                 style={styles.cancelAction}
                 onPress={() => {
@@ -553,7 +769,7 @@ export function RidePlannerScreen({
                 <RydoButton
                   label="Confirm pickup"
                   loading={requestRide.isPending}
-                  disabled={fareQuote.isFetching}
+                  disabled={fareQuote.isFetching || requestRide.isPending}
                   onPress={submitRideRequest}
                 />
               </View>
@@ -586,7 +802,7 @@ export function RidePlannerScreen({
                 High demand · {fareQuote.data.demandMultiplier.toFixed(2)}× is included in these prices.
               </Text>
             ) : null}
-            <PaymentMethodRow onPress={() => setPaymentOpen(true)} />
+            <PaymentMethodRow method={paymentMethod} onPress={() => setPaymentOpen(true)} />
             {rideError ? <Text selectable style={styles.error}>{rideError}</Text> : null}
             <RydoButton label="Continue" disabled={!profileReady} onPress={handlePlanRide} />
           </>
@@ -648,15 +864,28 @@ export function RidePlannerScreen({
           </>
         )}
       </RydoBottomSheet>
-      <PaymentModal visible={paymentOpen} onClose={() => setPaymentOpen(false)} />
+      <PaymentModal
+        method={paymentMethod}
+        visible={paymentOpen}
+        onChange={setPaymentMethod}
+        onClose={() => setPaymentOpen(false)}
+      />
       {cancelOpen ? (
         <CancellationModal
           loading={cancelRide.isPending}
           error={cancelRide.error ? 'Your ride could not be cancelled. Please try again.' : undefined}
           onClose={() => setCancelOpen(false)}
-          onConfirm={(reason) => activeTrip && cancelRide.mutate({ tripId: activeTrip.id, reason })}
+          onConfirm={(reason) => flowTrip && cancelRide.mutate({ tripId: flowTrip.id, reason })}
         />
       ) : null}
+      <PayFastCheckoutModal
+        checkout={createPayment.data?.payFastCheckout ?? null}
+        visible={checkoutOpen}
+        onClose={() => {
+          setCheckoutOpen(false);
+          void payment.refetch();
+        }}
+      />
     </View>
   );
 }
@@ -686,20 +915,34 @@ function RouteLocationCard({
   );
 }
 
-function PaymentMethodRow({ onPress }: { onPress(): void }) {
+function PaymentMethodRow({ method, onPress }: { method: PaymentMethod; onPress(): void }) {
   return (
     <TouchableOpacity accessibilityRole="button" style={styles.paymentMethodRow} onPress={onPress}>
-      <View style={styles.cashIcon}><Text style={styles.cashIconText}>R</Text></View>
+      {method === 'Cash'
+        ? <View style={styles.cashIcon}><Text style={styles.cashIconText}>R</Text></View>
+        : <View style={styles.cardIcon}><Text style={styles.cardIconText}>CARD</Text></View>}
       <View style={styles.paymentMethodCopy}>
-        <Text selectable style={styles.paymentMethodTitle}>Cash</Text>
-        <Text selectable style={styles.paymentMethodDetail}>Pay your driver after the ride</Text>
+        <Text selectable style={styles.paymentMethodTitle}>{method === 'Cash' ? 'Cash' : 'Card / PayFast'}</Text>
+        <Text selectable style={styles.paymentMethodDetail}>
+          {method === 'Cash' ? 'Pay your driver after the ride' : 'Checkout begins after a driver accepts'}
+        </Text>
       </View>
       <RydoIcon name="chevron-right" color={colors.textMuted} size={18} />
     </TouchableOpacity>
   );
 }
 
-function PaymentModal({ visible, onClose }: { visible: boolean; onClose(): void }) {
+function PaymentModal({
+  method,
+  visible,
+  onChange,
+  onClose,
+}: {
+  method: PaymentMethod;
+  visible: boolean;
+  onChange(method: PaymentMethod): void;
+  onClose(): void;
+}) {
   return (
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
@@ -712,26 +955,138 @@ function PaymentModal({ visible, onClose }: { visible: boolean; onClose(): void 
             </Pressable>
           </View>
           <Text selectable style={styles.modalSectionLabel}>Payment methods</Text>
-          <View style={styles.paymentChoiceSelected}>
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: method === 'Cash' }}
+            onPress={() => onChange('Cash')}
+            style={method === 'Cash' ? styles.paymentChoiceSelected : styles.paymentChoiceEnabled}
+          >
             <View style={styles.cashIcon}><Text style={styles.cashIconText}>R</Text></View>
             <View style={styles.paymentMethodCopy}>
               <Text selectable style={styles.paymentMethodTitle}>Cash</Text>
-              <Text selectable style={styles.paymentMethodDetail}>Selected for this ride</Text>
+              <Text selectable style={styles.paymentMethodDetail}>Pay your driver after the ride</Text>
             </View>
-            <View style={styles.radioSelected}><View style={styles.radioCenter} /></View>
-          </View>
-          <View style={styles.paymentChoiceDisabled}>
-            <View style={styles.cardIcon}><Text style={styles.cardIconText}>••••</Text></View>
+            {method === 'Cash'
+              ? <View style={styles.radioSelected}><View style={styles.radioCenter} /></View>
+              : <View style={styles.radioDisabled} />}
+          </Pressable>
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: method === 'PayFast' }}
+            onPress={() => onChange('PayFast')}
+            style={method === 'PayFast' ? styles.paymentChoiceSelected : styles.paymentChoiceEnabled}
+          >
+            <View style={styles.cardIcon}><Text style={styles.cardIconText}>CARD</Text></View>
             <View style={styles.paymentMethodCopy}>
-              <Text selectable style={styles.paymentDisabledTitle}>Card / PayFast</Text>
-              <Text selectable style={styles.paymentMethodDetail}>Coming soon</Text>
+              <Text selectable style={styles.paymentMethodTitle}>Card / PayFast</Text>
+              <Text selectable style={styles.paymentMethodDetail}>Checkout starts when your driver accepts</Text>
             </View>
-            <View style={styles.radioDisabled} />
-          </View>
+            {method === 'PayFast'
+              ? <View style={styles.radioSelected}><View style={styles.radioCenter} /></View>
+              : <View style={styles.radioDisabled} />}
+          </Pressable>
           <RydoButton label="Done" onPress={onClose} />
         </View>
       </View>
     </Modal>
+  );
+}
+
+function PassengerCompletionPanel({
+  payment,
+  paymentError,
+  rating,
+  ratingComment,
+  ratingPending,
+  ratingScore,
+  onChangeComment,
+  onChangeScore,
+  onDone,
+  onRetryPayment,
+  onSubmitRating,
+}: {
+  payment: Payment | null;
+  paymentError?: string;
+  rating: Rating | null;
+  ratingComment: string;
+  ratingPending: boolean;
+  ratingScore: number;
+  onChangeComment(value: string): void;
+  onChangeScore(value: number): void;
+  onDone(): void;
+  onRetryPayment(): void;
+  onSubmitRating(): void;
+}) {
+  return (
+    <View style={styles.completionPanel}>
+      <View style={styles.completionStatus}>
+        <RydoIcon
+          name={payment?.status === 'Paid' ? 'check' : 'card'}
+          color={payment?.status === 'Paid' ? colors.success : colors.blue}
+          size={22}
+        />
+        <View style={styles.completionCopy}>
+          <Text selectable style={styles.completionTitle}>
+            {payment?.status === 'Paid'
+              ? 'Payment complete'
+              : payment?.method === 'Cash'
+                ? 'Pay your driver in cash'
+                : 'Payment needs attention'}
+          </Text>
+          <Text selectable style={styles.completionMessage}>
+            {payment
+              ? `${formatFare(payment.amount, payment.currency)} · ${payment.status.replace(/([a-z])([A-Z])/g, '$1 $2')}`
+              : 'Preparing your trip payment…'}
+          </Text>
+        </View>
+      </View>
+
+      {paymentError ? (
+        <View style={styles.paymentErrorCard}>
+          <Text selectable style={styles.error}>{paymentError}</Text>
+          <TouchableOpacity onPress={onRetryPayment}>
+            <Text style={styles.retryText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {rating ? (
+        <View style={styles.ratingCompleteRow}>
+          <RydoIcon name="check" color={colors.success} size={19} />
+          <Text selectable style={styles.ratingCompleteText}>Thanks for rating your driver.</Text>
+        </View>
+      ) : (
+        <View style={styles.ratingPanel}>
+          <Text selectable style={styles.ratingTitle}>Rate your driver</Text>
+          <View accessibilityRole="radiogroup" style={styles.starsRow}>
+            {[1, 2, 3, 4, 5].map((score) => (
+              <Pressable
+                key={score}
+                accessibilityLabel={`${score} star${score === 1 ? '' : 's'}`}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: ratingScore === score }}
+                onPress={() => onChangeScore(score)}
+                style={styles.starButton}
+              >
+                <RydoIcon name="star" color={score <= ratingScore ? colors.amber : colors.border} size={30} />
+              </Pressable>
+            ))}
+          </View>
+          <TextInput
+            maxLength={500}
+            multiline
+            onChangeText={onChangeComment}
+            placeholder="Add a comment (optional)"
+            placeholderTextColor={colors.textMuted}
+            style={styles.ratingInput}
+            value={ratingComment}
+          />
+          <RydoButton label="Submit rating" loading={ratingPending} onPress={onSubmitRating} />
+        </View>
+      )}
+
+      {rating ? <RydoButton label="Done" onPress={onDone} /> : null}
+    </View>
   );
 }
 
@@ -1010,6 +1365,14 @@ function mapErrorMessage(error: unknown, fallback: string) {
   return error.problem?.detail ?? error.message;
 }
 
+function paymentErrorMessage(error: unknown) {
+  if (!isApiError(error)) return 'Payment could not be prepared. Please try again.';
+  if (error.status === 503) {
+    return 'Card checkout is wired but PayFast merchant credentials and public callback URLs are not configured yet.';
+  }
+  return error.problem?.detail ?? error.message;
+}
+
 function formatTripStatus(status: Trip['status']) {
   return status.replace(/([a-z])([A-Z])/g, '$1 $2');
 }
@@ -1078,7 +1441,7 @@ const styles = StyleSheet.create({
   routeDuration: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   routeDurationText: { color: colors.navy, fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
   routeFare: { color: colors.blue, fontSize: 25, lineHeight: 30, fontWeight: '900', fontVariant: ['tabular-nums'] },
-  chooseRideButton: { minHeight: 56, borderRadius: 18, borderCurve: 'continuous', paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: colors.blue, boxShadow: '0 9px 20px rgba(18,97,216,0.24)' },
+  chooseRideButton: { minHeight: 56, borderRadius: 18, borderCurve: 'continuous', paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: colors.blue, boxShadow: '0 9px 20px rgba(36,87,255,0.24)' },
   chooseRideButtonText: { color: colors.white, fontSize: 17, fontWeight: '900' },
   chooseRideArrow: { position: 'absolute', right: 20, color: colors.white, fontSize: 26, lineHeight: 28 },
   editRouteText: { color: colors.blue, fontSize: 13, fontWeight: '800' },
@@ -1169,6 +1532,12 @@ const styles = StyleSheet.create({
   paymentMethodCopy: { flex: 1, minWidth: 0, gap: 2 },
   paymentMethodTitle: { color: colors.navy, fontSize: 14, fontWeight: '900' },
   paymentMethodDetail: { color: colors.textMuted, fontSize: 11 },
+  paymentProgressCard: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 13, borderRadius: 18, backgroundColor: colors.blueMuted },
+  paymentProgressCopy: { minWidth: 0, flex: 1, gap: 2 },
+  paymentProgressTitle: { color: colors.navy, fontSize: 14, fontWeight: '900' },
+  paymentProgressMessage: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
+  checkoutAction: { minHeight: 38, justifyContent: 'center', paddingHorizontal: 13, borderRadius: 13, backgroundColor: colors.blue },
+  checkoutActionText: { color: colors.white, fontSize: 12, fontWeight: '900' },
   cashIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.blueMuted },
   cashIconText: { color: colors.blue, fontSize: 15, fontWeight: '900' },
   cardIcon: { width: 34, height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.navy },
@@ -1184,6 +1553,7 @@ const styles = StyleSheet.create({
   modalBackText: { color: colors.navy, fontSize: 30, lineHeight: 30, marginTop: -2 },
   modalSectionLabel: { color: colors.navy, fontSize: 13, fontWeight: '900' },
   paymentChoiceSelected: { minHeight: 66, borderWidth: 2, borderColor: colors.blue, borderRadius: 18, borderCurve: 'continuous', paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: colors.blueMuted },
+  paymentChoiceEnabled: { minHeight: 66, borderWidth: 1, borderColor: colors.border, borderRadius: 18, borderCurve: 'continuous', paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: '#F7F8FA' },
   paymentChoiceDisabled: { minHeight: 66, borderWidth: 1, borderColor: colors.border, borderRadius: 18, borderCurve: 'continuous', paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 11, opacity: 0.62, backgroundColor: '#F7F8FA' },
   paymentDisabledTitle: { color: colors.textMuted, fontSize: 14, fontWeight: '800' },
   radioSelected: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.blue, alignItems: 'center', justifyContent: 'center' },
@@ -1215,5 +1585,19 @@ const styles = StyleSheet.create({
   paymentSelectedText: { color: colors.white, fontWeight: '800' },
   paymentDisabled: { borderRadius: 999, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 9 },
   paymentDisabledText: { color: colors.textMuted, fontWeight: '700' },
+  completionPanel: { gap: 12 },
+  completionStatus: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 13, borderRadius: 18, backgroundColor: colors.blueMuted },
+  completionCopy: { minWidth: 0, flex: 1, gap: 2 },
+  completionTitle: { color: colors.navy, fontSize: 15, fontWeight: '900' },
+  completionMessage: { color: colors.textMuted, fontSize: 12 },
+  paymentErrorCard: { gap: 8, padding: 13, borderRadius: 16, backgroundColor: '#FFF0F2' },
+  retryText: { color: colors.blue, fontSize: 13, fontWeight: '900' },
+  ratingPanel: { gap: 10 },
+  ratingTitle: { color: colors.navy, fontSize: 18, fontWeight: '900', textAlign: 'center' },
+  starsRow: { flexDirection: 'row', justifyContent: 'center', gap: 6 },
+  starButton: { padding: 3 },
+  ratingInput: { minHeight: 72, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 13, paddingVertical: 11, color: colors.navy, backgroundColor: '#F9FAFD', textAlignVertical: 'top' },
+  ratingCompleteRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, borderRadius: 16, backgroundColor: colors.successMuted },
+  ratingCompleteText: { color: colors.success, fontSize: 13, fontWeight: '800' },
   error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
 });
